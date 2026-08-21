@@ -1,8 +1,6 @@
 import { AppShell } from "../components/app-shell";
 import { PortfolioWalkthrough } from "../components/portfolio-walkthrough";
 
-export const dynamic = "force-dynamic";
-
 export default function CareerPage() {
   return (
     <AppShell active="career">

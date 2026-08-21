@@ -1,8 +1,6 @@
 import { AppShell } from "../components/app-shell";
 import { SeedLibrary } from "../components/seed-library";
 
-export const dynamic = "force-dynamic";
-
 export default function LanguageLabPage() {
   return (
     <AppShell active="language">

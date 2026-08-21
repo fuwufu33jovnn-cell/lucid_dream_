@@ -1,8 +1,6 @@
 import { AppShell } from "../components/app-shell";
 import { ExamWorkspace } from "../components/exam-workspace";
 
-export const dynamic = "force-dynamic";
-
 export default function IeltsPage() {
   return (
     <AppShell active="ielts">

@@ -1,8 +1,6 @@
 import { AppShell } from "./components/app-shell";
 import { TodayBoard } from "./components/today-board";
 
-export const dynamic = "force-dynamic";
-
 export default function TodayPage() {
   return (
     <AppShell active="today">

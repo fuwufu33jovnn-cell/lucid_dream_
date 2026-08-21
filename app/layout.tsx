@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const favicon =
+  process.env.GITHUB_ACTIONS === "true"
+    ? "/lucid_dream_/favicon.svg"
+    : "/favicon.svg";
+
 export const metadata: Metadata = {
   title: "LUCID DREAM",
   description: "Your calm route to English, work, and life abroad.",
@@ -8,8 +13,8 @@ export const metadata: Metadata = {
     "codex-preview": "development",
   },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: favicon,
+    shortcut: favicon,
   },
 };
 
