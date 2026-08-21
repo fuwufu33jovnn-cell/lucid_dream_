@@ -1,81 +1,126 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { putRecord } from "../lib/indexed-db";
-import { SEED_LIBRARY, type SeedActivity, type SeedCategory } from "../lib/seeds";
-import { systemNow } from "../lib/exam";
+import { useEffect, useMemo, useState } from "react";
 
-const CATEGORIES: Array<"All" | SeedCategory> = ["All", "Design", "Work", "Life", "Culture", "Academic"];
+import {
+  fallbackCatalogue,
+  filterCatalogue,
+  sourceFromRow,
+  type LearningMediaType,
+  type NormalizedSource,
+} from "../lib/learning-sources.ts";
+import { systemNow } from "../lib/exam";
+import { putRecord } from "../lib/indexed-db";
+import { getSupabaseBrowserClient } from "../lib/supabase";
+import styles from "./language-catalogue.module.css";
+
+type CatalogueState = "fallback" | "loading" | "ready" | "error";
+
+const KIND_OPTIONS: Array<{ value: "all" | LearningMediaType; label: string }> = [
+  { value: "all", label: "All formats" },
+  { value: "video", label: "Video" },
+  { value: "audio", label: "Audio" },
+  { value: "article", label: "Article" },
+  { value: "course", label: "Course" },
+  { value: "text", label: "Text" },
+];
+const LEVEL_OPTIONS = ["all", "A1", "A2", "B1", "B2", "C1", "C2"] as const;
+const DURATION_OPTIONS = [
+  { value: "all", label: "Any duration" },
+  { value: "900", label: "Up to 15 min" },
+  { value: "1800", label: "Up to 30 min" },
+];
+
+function labelForHealth(health: NormalizedSource["health"]): string {
+  return health === "healthy" ? "Available" : health === "stale" ? "Needs review" : "Unavailable";
+}
+
+function durationLabel(seconds: number | null): string {
+  return seconds === null ? "Flexible" : `${Math.max(1, Math.round(seconds / 60))} min`;
+}
 
 export function SeedLibrary() {
-  const [category, setCategory] = useState<"All" | SeedCategory>("All");
-  const [level, setLevel] = useState("All");
-  const [minutes, setMinutes] = useState("All");
+  const [sources, setSources] = useState<NormalizedSource[]>(fallbackCatalogue);
+  const [catalogueState, setCatalogueState] = useState<CatalogueState>("fallback");
+  const [kind, setKind] = useState<"all" | LearningMediaType>("all");
+  const [topic, setTopic] = useState("all");
+  const [level, setLevel] = useState<(typeof LEVEL_OPTIONS)[number]>("all");
+  const [duration, setDuration] = useState("all");
+  const [textAvailability, setTextAvailability] = useState("all");
+  const [health, setHealth] = useState("all");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<SeedActivity | null>(null);
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<NormalizedSource | null>(null);
   const [saved, setSaved] = useState<string[]>([]);
   const [saveMessage, setSaveMessage] = useState("");
 
-  const results = useMemo(() => SEED_LIBRARY.filter((item) => {
-    const haystack = `${item.title} ${item.publisher} ${item.skills.join(" ")}`.toLowerCase();
-    return (category === "All" || item.category === category)
-      && (level === "All" || item.level === level)
-      && (minutes === "All" || item.minutes === Number(minutes))
-      && haystack.includes(query.trim().toLowerCase());
-  }), [category, level, minutes, query]);
+  useEffect(() => {
+    let active = true;
+    async function loadCatalogue() {
+      const client = getSupabaseBrowserClient();
+      if (!client) return;
+      setCatalogueState("loading");
+      const { data, error } = await client.from("learning_sources").select("*").order("updated_at", { ascending: false }).limit(120);
+      if (!active) return;
+      if (error) { setCatalogueState("error"); return; }
+      if (!data?.length) { setCatalogueState("fallback"); return; }
+      setSources(data.map(sourceFromRow));
+      setCatalogueState("ready");
+    }
+    void loadCatalogue().catch(() => { if (active) setCatalogueState("error"); });
+    return () => { active = false; };
+  }, []);
 
-  async function saveItem(item: SeedActivity) {
+  const topics = useMemo(() => [...new Set(sources.flatMap((source) => source.topics))].sort((left, right) => left.localeCompare(right)), [sources]);
+  const results = useMemo(() => filterCatalogue(sources, {
+    kind: kind === "all" ? undefined : kind,
+    topic: topic === "all" ? undefined : topic,
+    cefrLevel: level === "all" ? undefined : level,
+    maxDurationSeconds: duration === "all" ? undefined : Number(duration),
+    hasText: textAvailability === "all" ? undefined : textAvailability === "with-text",
+    health: health === "all" ? undefined : health as NormalizedSource["health"],
+    query,
+    page,
+    pageSize: 8,
+  }), [duration, health, kind, level, page, query, sources, textAvailability, topic]);
+
+  function resetPage(action: () => void) { action(); setPage(0); }
+  async function saveItem(item: NormalizedSource) {
     try {
-      await putRecord("library", { id: item.id, savedAt: systemNow() });
-      setSaved((current) => current.includes(item.id) ? current : [...current, item.id]);
+      await putRecord("library", { id: item.canonicalKey, sourceUrl: item.canonical_url, savedAt: systemNow() });
+      setSaved((current) => current.includes(item.canonicalKey) ? current : [...current, item.canonicalKey]);
       setSaveMessage("Saved on this device");
     } catch { setSaveMessage("Could not save on this device"); }
   }
 
-  return (
-    <section className="library-layout">
-      <div className="library-main">
-        <div className="library-filters">
-          <div className="category-chips" aria-label="Content category">
-            {CATEGORIES.map((item) => <button className={category === item ? "is-active" : ""} key={item} type="button" onClick={() => setCategory(item)}>{item}</button>)}
-          </div>
-          <div className="filter-row">
-            <label className="search-field"><span className="sr-only">Search activities</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search topics or skills" /></label>
-            <label><span className="sr-only">Level</span><select value={level} onChange={(event) => setLevel(event.target.value)}><option>All</option><option>B1</option><option>B2</option><option>C1</option></select></label>
-            <label><span className="sr-only">Duration</span><select value={minutes} onChange={(event) => setMinutes(event.target.value)}><option>All</option><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option></select></label>
-          </div>
-        </div>
+  const sourceNotice = catalogueState === "ready" ? "Live public catalogue" : catalogueState === "loading" ? "Checking public catalogue…" : catalogueState === "error" ? "Using bundled catalogue while the public catalogue is unavailable." : "Bundled catalogue for offline or unconfigured builds";
 
-        <div className="library-count"><span>{results.length} activities</span><span>Publisher-hosted sources</span></div>
-        <div className="seed-grid">
-          {results.map((item, index) => (
-            <article className="seed-card" key={item.id}>
-              <div className="seed-top"><span>{String(index + 1).padStart(2, "0")}</span><span>{item.minutes} MIN</span></div>
-              <div><p>{item.category} · {item.level}</p><h2>{item.title}</h2><span className="publisher">{item.publisher}</span></div>
-              <div className="skill-list">{item.skills.map((skill) => <span key={skill}>{skill}</span>)}</div>
-              <div className="seed-actions"><button type="button" onClick={() => setSelected(item)}>View activity</button><button className={saved.includes(item.id) ? "is-saved" : ""} type="button" onClick={() => void saveItem(item)}>{saved.includes(item.id) ? "Saved" : "Save"}</button></div>
-            </article>
-          ))}
+  return (
+    <section className={styles.catalogue} aria-busy={catalogueState === "loading"}>
+      <div className={styles.toolbar}>
+        <label className={styles.search}><span className="sr-only">Search catalogue</span><input value={query} onChange={(event) => resetPage(() => setQuery(event.target.value))} placeholder="Search topics, skills, or publishers" /></label>
+        <div className={styles.filters}>
+          <select aria-label="Source format" value={kind} onChange={(event) => resetPage(() => setKind(event.target.value as "all" | LearningMediaType))}>{KIND_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+          <select aria-label="Topic" value={topic} onChange={(event) => resetPage(() => setTopic(event.target.value))}><option value="all">All topics</option>{topics.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          <select aria-label="CEFR level" value={level} onChange={(event) => resetPage(() => setLevel(event.target.value as (typeof LEVEL_OPTIONS)[number]))}>{LEVEL_OPTIONS.map((item) => <option key={item} value={item}>{item === "all" ? "All levels" : item}</option>)}</select>
+          <select aria-label="Duration" value={duration} onChange={(event) => resetPage(() => setDuration(event.target.value))}>{DURATION_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+          <select aria-label="Transcript or text availability" value={textAvailability} onChange={(event) => resetPage(() => setTextAvailability(event.target.value))}><option value="all">Text optional</option><option value="with-text">Text available</option><option value="without-text">No text</option></select>
+          <select aria-label="Health" value={health} onChange={(event) => resetPage(() => setHealth(event.target.value))}><option value="all">All availability</option><option value="healthy">Available</option><option value="stale">Needs review</option><option value="unavailable">Unavailable</option></select>
         </div>
       </div>
-
-      <aside className={selected ? "activity-drawer is-open" : "activity-drawer"} aria-label="Activity details">
-        {selected ? (
-          <>
-            <button className="drawer-close" type="button" onClick={() => setSelected(null)} aria-label="Close activity">×</button>
-            <span className="source-label">{selected.category} · {selected.level} · {selected.minutes} MIN</span>
-            <h2>{selected.title}</h2>
-            <p className="drawer-publisher">{selected.publisher}</p>
-            <div className="activity-step"><span>01</span><div><strong>Before you open it</strong><p>{selected.prompt}</p></div></div>
-            <div className="activity-step"><span>02</span><div><strong>Your required output</strong><p>{selected.output}</p></div></div>
-            <div className="rights-note"><strong>Usage note</strong><p>{selected.usageBasis}</p><small>Reviewed {selected.reviewedAt}</small></div>
-            <a className="primary-action source-action" href={selected.sourceUrl} target="_blank" rel="noreferrer">Open on publisher site ↗</a>
-            <button className="secondary-action" type="button" onClick={() => void saveItem(selected)}>Save activity</button>
-            <p className="drawer-status" role="status">{saveMessage}</p>
-          </>
-        ) : (
-          <div className="drawer-empty"><span>↗</span><p>选择一个素材，查看专门为它设计的输入与输出练习。</p></div>
-        )}
+      <div className={styles.summary} role="status"><span>{results.total} sources</span><span>{sourceNotice}</span></div>
+      {results.items.length ? <div className={styles.grid}>{results.items.map((item) => {
+        const isSaved = saved.includes(item.canonicalKey);
+        return <article className={styles.card} key={item.canonicalKey}>
+          <div className={styles.cardMeta}><span>{item.media_type}</span><span className={`${styles.health} ${styles[item.health]}`}>{labelForHealth(item.health)}</span></div>
+          <div><p>{item.topics.join(" · ") || "General"} · {item.cefr_level ?? "Any level"}</p><h2>{item.title}</h2><span>{item.publisher}</span></div>
+          <div className={styles.tags}>{item.skills.slice(0, 3).map((skill) => <span key={skill}>{skill}</span>)}<span>{durationLabel(item.expected_duration_seconds)}</span>{item.has_text && <span>Text</span>}</div>
+          <div className={styles.actions}><button type="button" onClick={() => setSelected(item)}>Details</button><button className={isSaved ? styles.saved : undefined} type="button" onClick={() => void saveItem(item)}>{isSaved ? "Saved" : "Save"}</button></div>
+        </article>;
+      })}</div> : <div className={styles.empty} role="status"><strong>No sources match those filters.</strong><p>Clear a filter or try a broader search. The catalogue stores metadata and links only.</p><button type="button" onClick={() => { setKind("all"); setTopic("all"); setLevel("all"); setDuration("all"); setTextAvailability("all"); setHealth("all"); setQuery(""); setPage(0); }}>Clear filters</button></div>}
+      {results.hasMore && <button className={styles.loadMore} type="button" onClick={() => setPage((current) => current + 1)}>Load more sources</button>}
+      <aside className={selected ? `${styles.drawer} ${styles.open}` : styles.drawer} aria-label="Source details">
+        {selected ? <><button className={styles.close} type="button" onClick={() => setSelected(null)} aria-label="Close source details">×</button><span>{selected.media_type} · {selected.cefr_level ?? "Any level"} · {durationLabel(selected.expected_duration_seconds)}</span><h2>{selected.title}</h2><p className={styles.publisher}>{selected.publisher}</p><div className={styles.detail}><strong>Study prompt</strong><p>Open this publisher-hosted source, note one idea you can reuse, then create a short English response.</p></div><div className={styles.detail}><strong>Source status</strong><p>{labelForHealth(selected.health)}. {selected.has_text ? "Text or captions may be available from the source." : "Text availability is not guaranteed."}</p></div><div className={styles.rights}><strong>Usage note</strong><p>{selected.usage_basis}</p><small>{selected.last_checked_at ? `Checked ${new Date(selected.last_checked_at).toLocaleDateString()}` : "Check date unavailable"}</small></div><a className={styles.openSource} href={selected.canonical_url} target="_blank" rel="noreferrer">Open on publisher site ↗</a><button className={styles.saveDetail} type="button" onClick={() => void saveItem(selected)}>Save source</button><p role="status">{saveMessage}</p></> : <div className={styles.emptyDrawer}><span>↗</span><p>Choose a source to check its availability, rights note, and study prompt.</p></div>}
       </aside>
     </section>
   );

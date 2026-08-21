@@ -5,8 +5,8 @@ export default function LanguageLabPage() {
   return (
     <AppShell active="language">
       <header className="page-heading compact-heading library-heading">
-        <div><p className="eyebrow">INPUT THAT EARNS AN OUTPUT</p><h1>Language Lab</h1><p className="lede">不用面对空白输入框。从 24 个精选入口直接开始，每次看完都留下一个英文输出。</p></div>
-        <span className="phase-pill">24 SEEDS</span>
+        <div><p className="eyebrow">INPUT THAT EARNS AN OUTPUT</p><h1>Language Lab</h1><p className="lede">从经过核对的公开来源开始。筛选适合你的输入，并用一段英文输出留下收获。</p></div>
+        <span className="phase-pill">SOURCE CATALOGUE</span>
       </header>
       <SeedLibrary />
     </AppShell>
