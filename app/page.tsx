@@ -12,7 +12,6 @@ export default function TodayPage() {
             三件事，45 分钟。先练能在国外真正用上的英语，再向雅思和作品集各走一步。
           </p>
         </div>
-        <p className="script-line" aria-hidden="true">dream clearly, move gently</p>
       </header>
 
       <TodayBoard />

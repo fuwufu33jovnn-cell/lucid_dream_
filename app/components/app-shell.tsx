@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
+import { useAuth } from "./auth-provider";
+import { getAuthErrorMessage } from "../lib/auth-state";
 
 type NavId = "today" | "ielts" | "language" | "career" | "route" | "progress" | "life";
 
@@ -16,6 +21,24 @@ export function AppShell({ active, children }: {
   active: NavId;
   children: React.ReactNode;
 }) {
+  const { user, loading, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutMessage, setSignOutMessage] = useState<string | null>(null);
+  const displayName = typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : user?.email?.split("@")[0] || "Learner";
+  const initials = displayName.slice(0, 2).toUpperCase();
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    setSignOutMessage(null);
+    try {
+      await signOut();
+    } catch (error) {
+      setSignOutMessage(getAuthErrorMessage(error));
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
     <div className="app-frame">
       <aside className="side-rail">
@@ -33,8 +56,17 @@ export function AppShell({ active, children }: {
           ))}
         </nav>
         <div className="account-card">
-          <span className="avatar" aria-hidden="true">LD</span>
-          <span className="account-copy"><strong>Dreamer</strong><small>Saved on this device</small></span>
+          <span className="avatar" aria-hidden="true">{user ? initials : "LD"}</span>
+          <span className="account-copy">
+            <strong>{loading ? "Checking account" : user ? displayName : "Guest"}</strong>
+            <small>{loading ? "" : user?.email || "Sign in to sync your practice"}</small>
+          </span>
+          {user ? (
+            <button className="sign-out" type="button" onClick={handleSignOut} disabled={signingOut}>
+              {signingOut ? "…" : "Sign out"}
+            </button>
+          ) : !loading && <Link className="sign-in" href="/login">Sign in</Link>}
+          {signOutMessage && <p className="account-message" role="status">{signOutMessage}</p>}
         </div>
       </aside>
       <main className="main-canvas">{children}</main>

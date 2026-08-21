@@ -9,6 +9,7 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
@@ -36,6 +37,7 @@
     "db",
     "drizzle",
     "examples",
+    "supabase/functions",
     "vite.config.ts",
     "worker"
   ]
