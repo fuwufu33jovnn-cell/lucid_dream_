@@ -113,3 +113,27 @@ export function normalizeLegacyPortfolioDraft(draft: PortfolioDraft): CareerProj
 export function createBlankCareerProject(id = "career-project-1"): CareerProjectSummary {
   return { id, title: "", summary: "", targetRole: "", evidence: [], artifactCount: 0, practiceCount: 0 };
 }
+
+export function encodeCareerProjectSummary(summary: string, targetRole: string): string {
+  return JSON.stringify({ version: 1, summary, targetRole });
+}
+
+export function decodeCareerProjectSummary(value: string): { summary: string; targetRole: string } {
+  try {
+    const parsed = JSON.parse(value) as { summary?: unknown; targetRole?: unknown };
+    return { summary: typeof parsed.summary === "string" ? parsed.summary : value, targetRole: typeof parsed.targetRole === "string" ? parsed.targetRole : "" };
+  } catch { return { summary: value, targetRole: "" }; }
+}
+
+export function encodeEvidenceContent(evidence: CareerEvidenceClaim): string {
+  return JSON.stringify({ version: 1, kind: evidence.kind, claim: evidence.claim, support: evidence.support });
+}
+
+export function decodeEvidenceContent(id: string, value: string, provenance: "learner" | "imported" | "ai-inference"): CareerEvidenceClaim {
+  const mappedProvenance: CareerEvidenceProvenance = provenance === "learner" ? "learner-claim" : provenance === "imported" ? "imported-source" : "ai-inference";
+  try {
+    const parsed = JSON.parse(value) as { kind?: unknown; claim?: unknown; support?: unknown };
+    const kinds: CareerEvidenceKind[] = ["audience", "problem", "role", "constraint", "decision", "alternative", "iteration", "outcome", "role-fit"];
+    return { id, kind: kinds.includes(parsed.kind as CareerEvidenceKind) ? parsed.kind as CareerEvidenceKind : "problem", claim: typeof parsed.claim === "string" ? parsed.claim : value, support: typeof parsed.support === "string" ? parsed.support : "", provenance: mappedProvenance };
+  } catch { return { id, kind: "problem", claim: value, support: "", provenance: mappedProvenance }; }
+}

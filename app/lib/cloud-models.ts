@@ -380,6 +380,7 @@ export type VocabularyEntryRow = {
   segment_id: string | null; canonical_url: string | null; collocations: string[]; learner_note: string;
   tags: string[]; familiarity: VocabularyFamiliarity; review_due_at: string | null;
   review_interval_days: number; ai_provider: string | null; ai_model: string | null;
+  source_available: boolean;
   created_at: string; updated_at: string;
 };
 export type VocabularyEntryInsert = {
@@ -390,6 +391,7 @@ export type VocabularyEntryInsert = {
   material_id?: string | null; segment_id?: string | null; canonical_url?: string | null; collocations?: string[];
   learner_note?: string; tags?: string[]; familiarity?: VocabularyFamiliarity; review_due_at?: string | null;
   review_interval_days?: number; ai_provider?: string | null; ai_model?: string | null;
+  source_available?: boolean;
 };
 export type VocabularyEntryUpdate = Partial<Omit<VocabularyEntryInsert, "id" | "user_id">>;
 
@@ -537,6 +539,11 @@ export type Database = {
         Returns: string;
       };
       consume_evaluate_attempt_budget: { Args: { p_user_id: string }; Returns: boolean; };
+      delete_learning_material: { Args: { p_material_id: string }; Returns: boolean; };
+      save_career_project_with_evidence: {
+        Args: { p_project_id: string | null; p_title: string; p_summary: string; p_evidence: Json };
+        Returns: string;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

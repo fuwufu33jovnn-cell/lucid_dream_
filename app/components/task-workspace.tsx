@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 
 import type { FeedbackResult, TaskType, TodayTask } from "../lib/models";
+import type { AiProviderId } from "../lib/ai-availability";
 import { completeFeedbackTaskAttempt, completeTaskWithoutAi, type TaskCompletionClient } from "../lib/task-completion";
 import { clearTaskDraft, getTaskDraftStorage, readTaskDraft, writeTaskDraft } from "../lib/task-draft";
 import { getSupabaseBrowserClient } from "../lib/supabase";
 import { createAttempt, transitionAttempt } from "../lib/task-attempt";
 import { useAuth } from "./auth-provider";
+import { AiModelControl } from "./ai-model-control";
 import { FeedbackReport } from "./feedback-report";
 import { TaskInput } from "./task-input";
 
@@ -77,6 +79,7 @@ function TaskWorkspaceContent({ task, user, loading, configured }: {
   const [draftSaved, setDraftSaved] = useState<boolean | null>(() => draftStorage === null ? false : null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedRecording, setSelectedRecording] = useState<SelectedRecording | null>(null);
+  const [aiChoice, setAiChoice] = useState<{ provider: AiProviderId; model: string; available: boolean }>({ provider: "deepseek", model: "deepseek-chat", available: false });
   const isSignedIn = Boolean(user);
 
   function updateInput(inputText: string) {
@@ -99,6 +102,8 @@ function TaskWorkspaceContent({ task, user, loading, configured }: {
       body.set("taskType", attempt.taskType);
       body.set("text", attempt.inputText);
       body.set("timeZone", Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+      body.set("provider", aiChoice.provider);
+      body.set("model", aiChoice.model);
       if (selectedRecording) {
         body.set("audio", selectedRecording.blob, "today-attempt.webm");
       }
@@ -184,6 +189,7 @@ function TaskWorkspaceContent({ task, user, loading, configured }: {
 
       <div className="task-workspace-grid">
         <div className="task-panel">
+          <AiModelControl capability={selectedRecording ? "transcription" : "structured-text"} value={aiChoice.provider} onChange={(provider, model, available) => setAiChoice({ provider, model, available })} />
           <TaskInput
             taskType={attempt.taskType}
             value={attempt.inputText}
@@ -216,7 +222,7 @@ function TaskWorkspaceContent({ task, user, loading, configured }: {
       {saveMessage && <p className="task-message" role="status">{saveMessage}</p>}
       <div className="task-actions">
         {attempt.status === "failed" && <button className="secondary-action" type="button" onClick={() => setAttempt((current) => transitionAttempt(current, { type: "retry" }))}>Retry feedback</button>}
-        {attempt.status !== "completed" && <button className="secondary-action" type="button" onClick={() => void submitForFeedback()} disabled={!isSignedIn || attempt.status === "submitting"}>Submit for feedback</button>}
+        {attempt.status !== "completed" && <button className="secondary-action" type="button" onClick={() => void submitForFeedback()} disabled={!isSignedIn || !aiChoice.available || attempt.status === "submitting"}>Submit for feedback</button>}
         {attempt.status === "feedback-ready" && <button className="primary-action" type="button" onClick={() => void completeFeedback()} disabled={saveState === "saving"}>Complete task</button>}
         {(attempt.status === "draft" || attempt.status === "failed") && <button className="primary-action" type="button" onClick={() => void completeWithoutFeedback()} disabled={!isSignedIn || saveState === "saving"}>Complete without AI feedback</button>}
       </div>
