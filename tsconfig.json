@@ -36,6 +36,7 @@
     "db",
     "drizzle",
     "examples",
+    "vite.config.ts",
     "worker"
   ]
 }

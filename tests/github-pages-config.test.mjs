@@ -44,3 +44,10 @@ test("GitHub Pages workflow publishes the static out directory", async () => {
   assert.match(workflow, /path:\s*\.\/out/);
   assert.match(workflow, /actions\/deploy-pages@v4/);
 });
+
+test("Next.js type checking ignores the separate Vite preview config", async () => {
+  const tsconfig = await readFile(new URL("tsconfig.json", root), "utf8");
+  const parsed = JSON.parse(tsconfig);
+
+  assert.ok(parsed.exclude.includes("vite.config.ts"));
+});
