@@ -25,6 +25,10 @@ export function buildTodayPlan(mode: PlanMode): TodayTask[] {
   return PLANS[mode].map((task) => ({ ...task, planMode: mode }));
 }
 
+export function todayTaskHref(task: TodayTask): string {
+  return task.module === "IELTS" ? "/ielts/?from=today" : `/task/${task.id}`;
+}
+
 export function getTodayTask(taskId: string): TodayTask | null {
   for (const mode of [10, 45, 90] as const) {
     const task = PLANS[mode].find((item) => item.id === taskId);

@@ -24,6 +24,7 @@ const KIND_OPTIONS: Array<{ value: "all" | LearningMediaType; label: string }> =
   { value: "course", label: "Course" },
   { value: "text", label: "Text" },
 ];
+const FEATURED_TOPICS = ["Music", "Film"];
 const LEVEL_OPTIONS = ["all", "A1", "A2", "B1", "B2", "C1", "C2"] as const;
 const DURATION_OPTIONS = [
   { value: "all", label: "Any duration" },
@@ -71,7 +72,7 @@ export function SeedLibrary() {
     return () => { active = false; };
   }, []);
 
-  const topics = useMemo(() => [...new Set(sources.flatMap((source) => source.topics))].sort((left, right) => left.localeCompare(right)), [sources]);
+  const topics = useMemo(() => [...new Set([...FEATURED_TOPICS, ...sources.flatMap((source) => source.topics)])].sort((left, right) => left.localeCompare(right)), [sources]);
   const results = useMemo(() => filterCatalogue(sources, {
     kind: kind === "all" ? undefined : kind,
     topic: topic === "all" ? undefined : topic,

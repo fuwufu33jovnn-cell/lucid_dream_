@@ -112,7 +112,7 @@ export function ExamWorkspace() {
           )}
           <button className={recoverable ? "secondary-action" : "primary-action"} type="button"
             disabled={saveState === "checking" || saveState === "unavailable"} onClick={() => void startNew()}>
-            Start 20-minute practice
+            Start and show questions
           </button>
           <p className={`storage-proof ${saveState}`} role="status">
             {saveState === "checking" && "正在检查本地保存能力…"}

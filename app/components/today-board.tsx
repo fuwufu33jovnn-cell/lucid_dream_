@@ -7,7 +7,7 @@ import { useAuth } from "./auth-provider";
 import { getRecord, isIndexedDbAvailable, putRecord } from "../lib/indexed-db";
 import type { PlanMode, StoredRecord } from "../lib/models";
 import { getSupabaseBrowserClient } from "../lib/supabase";
-import { buildTodayPlan } from "../lib/today";
+import { buildTodayPlan, todayTaskHref } from "../lib/today";
 
 type PreferenceRecord = StoredRecord & { value: PlanMode };
 type SaveState = "loading" | "saved" | "saving" | "unavailable";
@@ -137,7 +137,7 @@ export function TodayBoard() {
             <article className={`task-card accent-${task.accent} ${done ? "is-done" : ""}`} key={task.id}>
               <span className="task-check" aria-hidden="true">{done ? "✓" : String(index + 1).padStart(2, "0")}</span>
               <div className="task-copy"><span>{task.module}</span><h2>{task.title}</h2><p>{task.detail}</p></div>
-              <div className="task-meta"><strong>{task.minutes}</strong><span>MIN</span><Link className="task-start" href={`/task/${task.id}`}>Start task</Link></div>
+              <div className="task-meta"><strong>{task.minutes}</strong><span>MIN</span><Link className="task-start" href={todayTaskHref(task)}>Start task</Link></div>
             </article>
           );
         })}

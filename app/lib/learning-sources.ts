@@ -145,20 +145,20 @@ function fallbackMediaType(sourceUrl: string): LearningMediaType {
   return "article";
 }
 
-export const fallbackCatalogue: NormalizedSource[] = SEED_LIBRARY.map((seed) => normalizeSource({
+export const fallbackCatalogue: NormalizedSource[] = dedupeSources(SEED_LIBRARY.map((seed) => ({
   publisher: seed.publisher,
   title: seed.title,
   canonicalUrl: seed.sourceUrl,
-  mediaType: fallbackMediaType(seed.sourceUrl),
-  topics: [seed.category],
+  mediaType: seed.mediaType ?? fallbackMediaType(seed.sourceUrl),
+  topics: seed.topics ?? [seed.category],
   cefrLevel: seed.level,
   expectedDurationSeconds: seed.minutes * 60,
   skills: seed.skills,
-  hasText: true,
+  hasText: seed.hasText ?? true,
   usageBasis: seed.usageBasis,
   lastCheckedAt: `${seed.reviewedAt}T00:00:00.000Z`,
   health: "healthy",
-}));
+})));
 
 export function sourceFromRow(row: LearningSourceRow): NormalizedSource {
   return {
