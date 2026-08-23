@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AiModelControl } from "./ai-model-control";
 import { getStudyFile, setStudyFile } from "../lib/study-session";
-import { parseStudySegments, type StudySegment } from "../lib/study-workspace";
+import { parseStudySegments, youtubeEmbedUrl, type StudySegment } from "../lib/study-workspace";
 import { saveVocabularyLocal } from "../lib/vocabulary";
 import type { AiProviderId } from "../lib/ai-availability";
 import styles from "./study-workspace.module.css";
@@ -32,6 +32,9 @@ function formatTime(milliseconds?: number): string | null {
 
 export function StudyWorkspace() {
   const searchParams = useSearchParams();
+  const source = searchParams.get("source");
+  const sourceTitle = searchParams.get("title");
+  const embed = source ? youtubeEmbedUrl(source) : null;
   const picker = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(() => getStudyFile(searchParams.get("local")));
   const [segments, setSegments] = useState<StudySegment[]>([]);
@@ -39,6 +42,7 @@ export function StudyWorkspace() {
   const [note, setNote] = useState("");
   const [saved, setSaved] = useState(false);
   const [provider, setProvider] = useState<AiProviderId>("deepseek");
+  const [manualTranscript, setManualTranscript] = useState("");
 
   const kind = file ? previewKind(file) : null;
   const url = useMemo(() => file && (kind === "audio" || kind === "video") ? URL.createObjectURL(file) : null, [file, kind]);
@@ -74,7 +78,7 @@ export function StudyWorkspace() {
 
   return <section className={styles.workspace}>
     <header className={styles.heading}>
-      <div><p className="eyebrow">LOCAL-FIRST STUDY SPACE</p><h1>{file?.name ?? "Open a material to study"}</h1><p>Preview stays in this browser. Transcript parsing, word lookup, notes, and saved words work even while AI is unavailable.</p></div>
+      <div><p className="eyebrow">ASSISTED STUDY SPACE</p><h1>{file?.name ?? sourceTitle ?? "Open a material to study"}</h1><p>Official embeds stay with their publisher. Transcript parsing, word lookup, notes, and saved words work even while AI is unavailable.</p></div>
       <Link href="/language-lab" className={styles.back}>Back to Language Lab</Link>
     </header>
 
@@ -84,13 +88,15 @@ export function StudyWorkspace() {
       <span>{file ? "Local preview only — not uploaded" : "SRT, VTT, TXT, audio, or video"}</span>
     </div>
 
-    {!file ? <div className={styles.empty}><strong>Choose a file to start.</strong><p>Text and subtitles become a manual transcript immediately; audio and video remain playable locally while a transcript awaits AI or a subtitle file.</p></div> : <>
+    {!file && !source ? <div className={styles.empty}><strong>Choose a file or a catalogue source to start.</strong><p>Text and subtitles become a manual transcript immediately; audio and video remain playable locally while a transcript awaits AI or a subtitle file.</p></div> : <>
       <div className={styles.grid}>
         <section className={styles.panel} aria-label="Material preview">
           <p className="section-kicker">LOCAL PREVIEW</p>
           {kind === "audio" && url && <audio className={styles.media} controls src={url}>Your browser cannot preview this audio file.</audio>}
           {kind === "video" && url && <video className={styles.media} controls src={url}>Your browser cannot preview this video file.</video>}
-          {kind === "text" && <p className={styles.textPreview}>{segments.length ? `${segments.length} local segment${segments.length === 1 ? "" : "s"} parsed from ${file.name}.` : "Reading your local text…"}</p>}
+          {kind === "text" && <p className={styles.textPreview}>{segments.length ? `${segments.length} local segment${segments.length === 1 ? "" : "s"} parsed from ${file?.name ?? "text"}.` : "Reading your local text…"}</p>}
+          {embed && <iframe className={styles.embed} src={embed} title={sourceTitle ?? "YouTube learning source"} allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowFullScreen />}
+          {source && !embed && <div className={styles.notice}><p>This publisher does not support an in-page preview here.</p><a href={source} target="_blank" rel="noreferrer">Open the source on its publisher site ↗</a></div>}
           {kind === "unsupported" && <p className={styles.notice}>This format cannot be previewed here yet. Try a subtitle, text, audio, or video file.</p>}
           {(kind === "audio" || kind === "video") && <p className={styles.notice}>No transcript has been invented for this media. Add an SRT/VTT file or connect an AI transcription flow.</p>}
         </section>
@@ -102,6 +108,7 @@ export function StudyWorkspace() {
 
       <section className={styles.transcript} aria-label="Bilingual transcript">
         <div className={styles.transcriptHeading}><div><p className="section-kicker">TRANSCRIPT</p><h2>Original, with space for AI meaning</h2></div><span>Click a word to look it up or save it.</span></div>
+        {!segments.length && <div className={styles.manualTranscript}><label><span>Paste a transcript or subtitle text you are allowed to use</span><textarea rows={6} value={manualTranscript} onChange={(event) => setManualTranscript(event.target.value)} placeholder="Paste transcript text here…" /></label><button type="button" className="secondary-action" disabled={!manualTranscript.trim()} onClick={() => setSegments(parseStudySegments(manualTranscript))}>Create study transcript</button></div>}
         {segments.length ? <div className={styles.rows}>{segments.map((segment) => <article className={styles.row} key={segment.id}>
           <div className={styles.time}>{formatTime(segment.startMs) ?? "—"}</div>
           <div><p className={styles.original}>{tokenise(segment.original).map((part, index) => /^[\p{L}\p{N}']/u.test(part) ? <button type="button" className={styles.word} key={`${part}-${index}`} onClick={(event) => openLookup(part, segment.original, event.currentTarget)}>{part}</button> : <span key={`${part}-${index}`}>{part}</span>)}</p><p className={styles.translation}>AI translation awaiting connection</p></div>

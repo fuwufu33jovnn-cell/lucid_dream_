@@ -45,12 +45,14 @@ test("answering a question returns a new checkpoint without mutating the old one
   assert.equal(updated.endAt, 1_200_000);
 });
 
-test("seed library contains 24 unique, actionable, rights-aware records", () => {
-  assert.equal(SEED_LIBRARY.length, 24);
-  assert.equal(new Set(SEED_LIBRARY.map((item) => item.id)).size, 24);
+test("expanded seed library stays broad, unique, actionable, and rights-aware", () => {
+  assert.ok(SEED_LIBRARY.length >= 80);
+  assert.equal(new Set(SEED_LIBRARY.map((item) => item.id)).size, SEED_LIBRARY.length);
   assert.ok(SEED_LIBRARY.every((item) => item.sourceUrl.startsWith("https://")));
   assert.ok(SEED_LIBRARY.every((item) => item.usageBasis.length > 10));
   assert.ok(SEED_LIBRARY.filter((item) => item.category === "Design").length >= 8);
+  assert.ok(SEED_LIBRARY.filter((item) => item.category === "Music").length >= 8);
+  assert.ok(SEED_LIBRARY.filter((item) => item.category === "Film").length >= 8);
   assert.ok(SEED_LIBRARY.every((item) => item.prompt && item.output));
 });
 

@@ -31,3 +31,21 @@ export function parseAvailabilityResponse(value: unknown): AiAvailability[] {
 export function selectAvailableModel(rows: AiAvailability[], provider: AiProviderId, capability: AiCapability): AiAvailability | null {
   return rows.find((row) => row.provider === provider && row.state === "available" && row.capabilities.includes(capability)) ?? null;
 }
+
+export function allEligibleProvidersExhausted(rows: AiAvailability[], capability: AiCapability): boolean {
+  const eligible = rows.filter((row) => row.capabilities.includes(capability));
+  return eligible.length > 0 && eligible.every((row) => row.state === "exhausted");
+}
+
+const PROVIDER_ACCOUNT_URLS: Record<AiProviderId, string> = {
+  deepseek: "https://platform.deepseek.com/",
+  doubao: "https://console.volcengine.com/ark",
+  gemini: "https://aistudio.google.com/billing",
+  grok: "https://console.x.ai/",
+  kimi: "https://platform.moonshot.cn/console/account",
+  perplexity: "https://console.perplexity.ai/",
+};
+
+export function providerAccountUrl(provider: AiProviderId): string {
+  return PROVIDER_ACCOUNT_URLS[provider];
+}

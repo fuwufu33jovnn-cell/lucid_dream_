@@ -5,6 +5,18 @@ export type StudySegment = {
   endMs?: number;
 };
 
+export function youtubeEmbedUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return null;
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    const id = host === "youtu.be" ? url.pathname.slice(1) : host === "youtube.com" || host === "m.youtube.com" ? url.searchParams.get("v") : null;
+    return id && /^[A-Za-z0-9_-]{6,20}$/.test(id) ? `https://www.youtube-nocookie.com/embed/${id}` : null;
+  } catch {
+    return null;
+  }
+}
+
 function timecodeToMilliseconds(value: string): number {
   const normalized = value.trim().replace(",", ".");
   const match = /^(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{1,3})$/.exec(normalized);
