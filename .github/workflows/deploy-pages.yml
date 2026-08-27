@@ -1,3 +1,4 @@
+# Public mirror for networks where chatgpt.site is unavailable.
 name: Deploy LUCID DREAM to GitHub Pages
 
 on:
