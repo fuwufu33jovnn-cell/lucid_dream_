@@ -30,15 +30,31 @@ test("writes, reads, and overwrites a durable preference record", async () => {
   );
 });
 
-test("creates every Phase 1 object store in one versioned database", async () => {
+test("creates every durable object store in one versioned database", async () => {
   const database = await repository.openLucidDb();
   assert.deepEqual(Array.from(database.objectStoreNames), [
+    "activity-progress",
     "examSessions",
     "library",
     "portfolio",
     "preferences",
     "today",
   ]);
+});
+
+test("persists the four-part language dossier and completion evidence", async () => {
+  const progress = {
+    id: "moma-magazine",
+    notice: "The opening establishes context before opinion.",
+    savedLanguage: "frames the work as",
+    shadowNote: "The pause made the contrast clearer.",
+    speakingOutline: "Context, detail, response.",
+    completedAt: 1234,
+    updatedAt: 1234,
+  };
+  await repository.putRecord("activity-progress", progress);
+  repository.closeLucidDb();
+  assert.deepEqual(await repository.getRecord("activity-progress", progress.id), progress);
 });
 
 test("recovers an exam checkpoint without extending its deadline", async () => {
@@ -57,4 +73,11 @@ test("recovers an exam checkpoint without extending its deadline", async () => {
   const recovered = await repository.getRecord("examSessions", checkpoint.id);
   assert.deepEqual(recovered.answers, checkpoint.answers);
   assert.equal(recovered.endAt, 1_200_000);
+});
+
+test("lists all records needed to build the Archive", async () => {
+  await repository.putRecord("activity-progress", { id: "one", savedLanguage: "first" });
+  await repository.putRecord("activity-progress", { id: "two", savedLanguage: "second" });
+  const records = await repository.getAllRecords("activity-progress");
+  assert.deepEqual(records.map((record) => record.id).sort(), ["one", "two"]);
 });

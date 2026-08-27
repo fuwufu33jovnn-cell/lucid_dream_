@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   assetPrefix: githubPagesBasePath || undefined,
   images: { unoptimized: true },
   trailingSlash: true,
+  typescript: { tsconfigPath: "./tsconfig.next.json" },
 };
 
 export default nextConfig;

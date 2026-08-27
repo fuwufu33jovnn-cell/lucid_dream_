@@ -1,8 +1,6 @@
 import type { PlanMode, TodayTask } from "./models";
 
-type TodayTaskTemplate = Omit<TodayTask, "planMode">;
-
-const PLANS: Record<PlanMode, TodayTaskTemplate[]> = {
+const PLANS: Record<PlanMode, TodayTask[]> = {
   10: [
     { id: "think-quick", module: "Speaking", title: "Think in English", detail: "看一个情境，用英语连续说 30 秒。", minutes: 5, accent: "coral" },
     { id: "ielts-quick", module: "IELTS", title: "One question, fully understood", detail: "做一道阅读题，并写下错误原因。", minutes: 5, accent: "blue" },
@@ -22,21 +20,5 @@ const PLANS: Record<PlanMode, TodayTaskTemplate[]> = {
 };
 
 export function buildTodayPlan(mode: PlanMode): TodayTask[] {
-  return PLANS[mode].map((task) => ({ ...task, planMode: mode }));
-}
-
-export function todayTaskHref(task: TodayTask): string {
-  return task.module === "IELTS" ? "/ielts/?from=today" : `/task/${task.id}`;
-}
-
-export function getTodayTask(taskId: string): TodayTask | null {
-  for (const mode of [10, 45, 90] as const) {
-    const task = PLANS[mode].find((item) => item.id === taskId);
-    if (task) return { ...task, planMode: mode };
-  }
-  return null;
-}
-
-export function getTodayTaskIds(): string[] {
-  return [...new Set(([10, 45, 90] as const).flatMap((mode) => PLANS[mode].map((task) => task.id)))];
+  return PLANS[mode].map((task) => ({ ...task }));
 }

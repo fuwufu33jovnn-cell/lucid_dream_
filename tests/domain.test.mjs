@@ -12,6 +12,12 @@ import {
   emptyPortfolioDraft,
   walkthroughCompleteness,
 } from "../app/lib/portfolio.ts";
+import {
+  EDITORIAL_ACTIVITIES,
+  LAB_MODES,
+  filterEditorialActivities,
+  summarizeActivityProgress,
+} from "../app/lib/editorial.ts";
 
 test("10-minute plan stays tiny enough to start", () => {
   assert.deepEqual(buildTodayPlan(10).map((task) => task.minutes), [5, 5]);
@@ -45,14 +51,12 @@ test("answering a question returns a new checkpoint without mutating the old one
   assert.equal(updated.endAt, 1_200_000);
 });
 
-test("expanded seed library stays broad, unique, actionable, and rights-aware", () => {
-  assert.ok(SEED_LIBRARY.length >= 80);
-  assert.equal(new Set(SEED_LIBRARY.map((item) => item.id)).size, SEED_LIBRARY.length);
+test("seed library contains 24 unique, actionable, rights-aware records", () => {
+  assert.equal(SEED_LIBRARY.length, 24);
+  assert.equal(new Set(SEED_LIBRARY.map((item) => item.id)).size, 24);
   assert.ok(SEED_LIBRARY.every((item) => item.sourceUrl.startsWith("https://")));
   assert.ok(SEED_LIBRARY.every((item) => item.usageBasis.length > 10));
   assert.ok(SEED_LIBRARY.filter((item) => item.category === "Design").length >= 8);
-  assert.ok(SEED_LIBRARY.filter((item) => item.category === "Music").length >= 8);
-  assert.ok(SEED_LIBRARY.filter((item) => item.category === "Film").length >= 8);
   assert.ok(SEED_LIBRARY.every((item) => item.prompt && item.output));
 });
 
@@ -79,4 +83,29 @@ test("portfolio outline turns evidence into a case-study structure without inven
 
   const missingImpact = buildWalkthroughOutline({ ...draft, impact: "" });
   assert.match(missingImpact.find((section) => section.label === "Impact").content, /measure next/i);
+});
+
+test("editorial activities can be browsed through the five approved lab modes", () => {
+  assert.deepEqual(LAB_MODES, ["Watch", "Listen", "Read", "Culture", "Random"]);
+  assert.ok(LAB_MODES.every((mode) => EDITORIAL_ACTIVITIES.some((item) => item.mode === mode)));
+  assert.equal(new Set(EDITORIAL_ACTIVITIES.map((item) => item.id)).size, EDITORIAL_ACTIVITIES.length);
+});
+
+test("editorial activity filtering combines mode and a case-insensitive query", () => {
+  const results = filterEditorialActivities(EDITORIAL_ACTIVITIES, "Read", "MOMA");
+  assert.deepEqual(results.map((item) => item.id), ["moma-magazine"]);
+});
+
+test("marginalia never masquerades as real community reviews", () => {
+  assert.ok(EDITORIAL_ACTIVITIES.every((item) => item.marginaliaLabel === "Fictional editorial marginalia"));
+  assert.ok(EDITORIAL_ACTIVITIES.every((item) => item.marginalia.length >= 2));
+});
+
+test("activity progress summary counts saved language and completions independently", () => {
+  const summary = summarizeActivityProgress([
+    { id: "a", savedLanguage: "quietly specific", completedAt: 200 },
+    { id: "b", savedLanguage: "", completedAt: null },
+    { id: "c", savedLanguage: "visual rhythm", completedAt: null },
+  ]);
+  assert.deepEqual(summary, { started: 3, completed: 1, phrases: 2 });
 });

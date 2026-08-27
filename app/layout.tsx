@@ -1,11 +1,5 @@
 import type { Metadata } from "next";
-import { AuthProvider } from "./components/auth-provider";
 import "./globals.css";
-
-const favicon =
-  process.env.GITHUB_ACTIONS === "true"
-    ? "/lucid_dream_/favicon.svg"
-    : "/favicon.svg";
 
 export const metadata: Metadata = {
   title: "LUCID DREAM",
@@ -14,8 +8,8 @@ export const metadata: Metadata = {
     "codex-preview": "development",
   },
   icons: {
-    icon: favicon,
-    shortcut: favicon,
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
   },
 };
 
@@ -26,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body><AuthProvider>{children}</AuthProvider></body>
+      <body>{children}</body>
     </html>
   );
 }

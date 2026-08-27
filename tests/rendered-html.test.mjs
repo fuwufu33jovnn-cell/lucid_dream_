@@ -64,6 +64,10 @@ test("renders the LUCID DREAM product shell", async () => {
   assert.match(html, /Today/);
   assert.match(html, /IELTS Exam/);
   assert.match(html, /Life Abroad/);
+  assert.match(html, /ISSUE 08/);
+  assert.match(html, /NIGHT<br\/>RADIO/);
+  assert.match(html, /TODAY, INSIDE THE ISSUE/);
+  assert.doesNotMatch(html, />Dreamer</);
   assert.doesNotMatch(html, /Starter Project/);
 });
 
@@ -90,4 +94,40 @@ test("serves the public homepage without an authenticated-user header", async ()
 
   assert.equal(response.status, 200);
   assert.match(await response.text(), /LUCID DREAM/);
+});
+
+test("renders the five-mode Language Lab index", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("lab", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/language-lab/", { headers: { accept: "text/html" } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  for (const mode of ["WATCH", "LISTEN", "READ", "CULTURE", "RANDOM"]) {
+    assert.match(html, new RegExp(`>${mode}<`));
+  }
+  assert.match(html, /MARGINALIA/);
+});
+
+test("replaces placeholder routes with an Archive and concrete editorial previews", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("phase2", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const env = { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+
+  const archive = await worker.fetch(new Request("http://localhost/progress/", { headers: { accept: "text/html" } }), env, ctx);
+  const archiveHtml = await archive.text();
+  assert.match(archiveHtml, /THE ARCHIVE/);
+  assert.doesNotMatch(archiveHtml, /PHASE 2/);
+
+  const route = await worker.fetch(new Request("http://localhost/route-map/", { headers: { accept: "text/html" } }), env, ctx);
+  assert.match(await route.text(), /THREE ROUTES, ONE DECISION/);
+
+  const life = await worker.fetch(new Request("http://localhost/life-abroad/", { headers: { accept: "text/html" } }), env, ctx);
+  assert.match(await life.text(), /PRACTICAL ENGLISH FOR REAL LIFE/);
 });

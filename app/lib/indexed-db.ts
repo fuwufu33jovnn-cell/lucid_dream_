@@ -5,11 +5,13 @@ export type StoreName =
   | "today"
   | "examSessions"
   | "library"
-  | "portfolio";
+  | "portfolio"
+  | "activity-progress";
 
 const DATABASE_NAME = "lucid-dream";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const STORES: StoreName[] = [
+  "activity-progress",
   "preferences",
   "today",
   "examSessions",
@@ -86,6 +88,19 @@ export async function putRecord<T extends StoredRecord>(
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
     transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB write was aborted."));
+  });
+}
+
+export async function getAllRecords<T extends StoredRecord>(
+  storeName: StoreName,
+): Promise<T[]> {
+  const database = await openLucidDb();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(storeName, "readonly");
+    const request = transaction.objectStore(storeName).getAll();
+    request.onsuccess = () => resolve(request.result as T[]);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB list failed."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB list was aborted."));
   });
 }
 

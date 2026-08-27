@@ -1,14 +1,11 @@
 import { AppShell } from "../components/app-shell";
-import { CareerDashboard } from "../components/career-dashboard";
+import { PortfolioWalkthrough } from "../components/portfolio-walkthrough";
 
 export default function CareerPage() {
   return (
     <AppShell active="career">
-      <header className="page-heading compact-heading portfolio-heading">
-        <div><p className="eyebrow">EVIDENCE · APPLICATIONS · SPEAKING</p><h1>Career Studio</h1><p className="lede">把项目证据变成可信的作品集、简历表达和英语面试练习。AI 只使用你确认过的事实。</p></div>
-        <span className="phase-pill">GUIDED WORKFLOW</span>
-      </header>
-      <CareerDashboard />
+      <header className="tool-page-heading portfolio-tool-heading"><p>04 / PORTFOLIO / CASE STUDY 01</p><h1>MAKE THE WORK<br />SPEAK CLEARLY.</h1><span>把痛点、取舍、系统、迭代与影响讲成可信的设计故事。</span></header>
+      <div className="tool-surface"><PortfolioWalkthrough /></div>
     </AppShell>
   );
 }

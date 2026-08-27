@@ -4,11 +4,8 @@ import { ExamWorkspace } from "../components/exam-workspace";
 export default function IeltsPage() {
   return (
     <AppShell active="ielts">
-      <header className="page-heading compact-heading exam-heading">
-        <div><p className="eyebrow">COMPUTER TEST FIRST</p><h1>IELTS Exam</h1><p className="lede">先把机考流程和防丢底座练熟。当前材料是原创模拟题，不冒充官方真题。</p></div>
-        <span className="phase-pill">ACADEMIC</span>
-      </header>
-      <ExamWorkspace />
+      <header className="tool-page-heading"><p>03 / IELTS / FOCUS MODE</p><h1>THE QUIET<br />EXAM DESK.</h1><span>原创模拟阅读材料。进入答题后，世界会安静下来。</span></header>
+      <div className="tool-surface"><ExamWorkspace /></div>
     </AppShell>
   );
 }
