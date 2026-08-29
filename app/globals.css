@@ -520,9 +520,7 @@ body {
 .personal-media-importer button:hover, .personal-media-importer button:focus-visible { background: var(--blue); }
 .personal-media-body { display: grid; grid-template-columns: minmax(220px, .72fr) minmax(0, 1.4fr); min-height: 300px; }
 .personal-media-index { max-height: 390px; overflow: auto; border-right: 1px solid var(--ink); }
-.personal-media-scope { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; background: var(--paper-strong); }
-.personal-media-index .personal-media-scope button { display: block; min-height: 42px; padding: 8px; border-right: 1px solid var(--ink); font-size: 8px; font-weight: 800; letter-spacing: .08em; text-align: center; }
-.personal-media-index .personal-media-scope button:last-child { border-right: 0; }
+.personal-media-scope { position: sticky; top: 0; z-index: 1; display: flex; min-height: 42px; align-items: center; justify-content: center; padding: 8px; border-bottom: 1px solid var(--ink); background: var(--acid); font-size: 8px; font-weight: 800; letter-spacing: .1em; text-align: center; }
 .personal-media-index button { width: 100%; display: grid; grid-template-columns: 32px 1fr; gap: 3px 8px; padding: 14px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; cursor: pointer; }
 .personal-media-index button strong { font-family: Georgia, "Times New Roman", serif; }
 .personal-media-index button small { grid-column: 2; color: var(--muted); text-transform: uppercase; }
@@ -538,10 +536,13 @@ body {
 .personal-media-empty span { color: var(--acid); font-family: Arial, Helvetica, sans-serif; font-size: clamp(48px, 8vw, 112px); font-weight: 800; line-height: .8; letter-spacing: -.08em; }
 .personal-media-empty p { max-width: 330px; font-size: 9px; letter-spacing: .12em; }
 .personal-media-status { margin: 0; padding: 10px 16px; border-top: 1px solid var(--ink); font-size: 8px; letter-spacing: .1em; }
-.floating-study-root { position: relative; z-index: 12; display: flex; justify-content: flex-end; border-top: 1px solid var(--ink); background: var(--paper-strong); }
-.floating-study-launcher { min-height: 42px; padding: 0 16px; border: 0; border-left: 1px solid var(--ink); background: var(--acid); cursor: pointer; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
-.floating-study-window { position: fixed; right: 22px; bottom: 22px; z-index: 50; width: min(480px, calc(100vw - 28px)); min-width: 300px; min-height: 330px; max-width: calc(100vw - 20px); max-height: calc(100vh - 20px); overflow: auto; resize: both; border: 1px solid var(--ink); background: var(--paper-strong); box-shadow: 12px 12px 0 rgba(23,23,23,.22); }
-.floating-study-handle { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; min-height: 54px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--ink); background: var(--ink); color: white; cursor: move; touch-action: none; }
+.floating-study-root { position: relative; z-index: 12; display: flex; height: 0; justify-content: flex-end; overflow: visible; }
+.floating-study-launcher { position: relative; z-index: 51; display: grid; width: 58px; height: 58px; margin: -29px 16px 0 0; place-content: center; border: 1px solid var(--ink); border-radius: 50%; background: #dfe9ff; box-shadow: 4px 4px 0 var(--ink); cursor: pointer; line-height: 1; transition: transform .18s ease, box-shadow .18s ease; }
+.floating-study-launcher:hover, .floating-study-launcher:focus-visible { transform: translateY(-3px) rotate(-3deg); box-shadow: 6px 7px 0 var(--acid); }
+.floating-study-launcher img { width: 43px; height: 43px; margin: -5px auto -3px; object-fit: contain; }
+.floating-study-launcher-label { margin-top: 2px; font-size: 6px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.floating-study-window { container-type: inline-size; position: fixed; right: 22px; bottom: 22px; z-index: 50; width: min(480px, calc(100vw - 28px)); min-width: 260px; min-height: 270px; max-width: calc(100vw - 20px); max-height: calc(100vh - 20px); overflow: auto; resize: both; border: 1px solid var(--ink); background: var(--paper-strong); box-shadow: 12px 12px 0 rgba(23,23,23,.22); }
+.floating-study-handle { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; min-height: 54px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--ink); background: var(--ink); color: white; cursor: move; touch-action: none; }
 .floating-study-handle > div { display: grid; }
 .floating-study-handle span { font-size: 8px; font-weight: 800; letter-spacing: .1em; }
 .floating-study-handle strong { overflow: hidden; font-family: Georgia, "Times New Roman", serif; font-size: 13px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
@@ -550,8 +551,8 @@ body {
 .subtitle-mode-switch button { min-height: 38px; border: 0; border-right: 1px solid var(--ink); background: transparent; cursor: pointer; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
 .subtitle-mode-switch button:last-child { border-right: 0; }
 .subtitle-mode-switch button.is-active { background: var(--acid); }
-.subtitle-study-copy { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); }
-.subtitle-study-copy textarea { width: 100%; min-height: 112px; resize: vertical; padding: 13px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--ink); border-radius: 0; background: #111; color: white; font-family: Georgia, "Times New Roman", serif; font-size: 13px; line-height: 1.55; }
+.subtitle-study-copy { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.subtitle-study-copy textarea { width: 100%; min-height: clamp(90px, 28cqw, 140px); resize: vertical; padding: clamp(9px, 3cqw, 13px); border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--ink); border-radius: 0; background: #111; color: white; font-family: Georgia, "Times New Roman", serif; font-size: clamp(10px, 3.1cqw, 13px); line-height: 1.55; }
 .subtitle-study-copy textarea:last-child { border-right: 0; }
 .floating-word-input { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--ink); }
 .floating-word-input span { font-size: 8px; font-weight: 800; letter-spacing: .08em; }
@@ -561,6 +562,15 @@ body {
 .floating-tool-actions button:hover { background: var(--acid); }
 .floating-tool-message, .floating-dictionary-result { margin: 0; padding: 8px 12px; font-size: 11px; }
 .subtitle-honesty { display: block; padding: 8px 12px 12px; color: var(--muted); font-size: 9px; line-height: 1.4; }
+@container (max-width: 390px) {
+  .subtitle-mode-switch button { min-height: 34px; font-size: 7px; letter-spacing: .04em; }
+  .subtitle-study-copy { grid-template-columns: 1fr; }
+  .subtitle-study-copy textarea { border-right: 0; }
+  .floating-word-input { grid-template-columns: 1fr; }
+  .floating-tool-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .floating-tool-actions button { width: 100%; padding: 0 4px; }
+  .floating-tool-message, .floating-dictionary-result, .subtitle-honesty { font-size: 9px; }
+}
 .lab-mode-strip { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--ink); }
 .lab-mode-strip button { display: flex; align-items: baseline; justify-content: space-between; min-height: 88px; padding: 18px clamp(12px, 2vw, 28px); border: 0; border-right: 1px solid var(--ink); border-radius: 0; background: transparent; cursor: pointer; font-family: Georgia, "Times New Roman", serif; font-size: clamp(18px, 2.4vw, 35px); }
 .lab-mode-strip button:last-child { border-right: 0; }
@@ -695,8 +705,6 @@ body {
   .dossier-finish { align-items: stretch; flex-direction: column; }
   .marginalia-reveal > div { grid-template-columns: 1fr; }
   .floating-study-window { right: 14px; bottom: 14px; min-width: 0; resize: vertical; transform: none !important; }
-  .floating-study-handle { grid-template-columns: minmax(0,1fr) auto; }
-  .floating-study-handle > span { display: none; }
   .exam-mode-picker { grid-template-columns: 1fr; }
   .exam-mode-picker button { min-height: 82px; border-right: 0; border-bottom: 1px solid var(--line); }
   .exam-bar { grid-template-columns: 1fr auto; gap: 8px; }

@@ -6,6 +6,7 @@ import { putRecord } from "../lib/indexed-db";
 import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../lib/language-tools";
 
 type SubtitleMode = "english" | "chinese" | "bilingual";
+const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export function FloatingStudyWindow({
   activityId,
@@ -75,13 +76,13 @@ export function FloatingStudyWindow({
   return (
     <div className="floating-study-root">
       <button className="floating-study-launcher" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        {open ? "HIDE STUDY WINDOW" : "FLOATING STUDY WINDOW"}
+        <img src={`${publicBasePath}/brand/pomeranian-assistant.png`} alt="" aria-hidden="true" /><span className="floating-study-launcher-label">{open ? "Close" : "Study"}</span>
+        <span className="sr-only">{open ? "Close floating study tools" : "Open floating study tools"}</span>
       </button>
       {open && (
         <aside className="floating-study-window" style={{ transform: `translate(${position.x}px, ${position.y}px)` }} aria-label={`Floating study tools for ${title}`}>
           <div className="floating-study-handle" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => { drag.current = null; }}>
             <div><span>FLOATING STUDY WINDOW</span><strong>{title}</strong></div>
-            <span>MOVE · RESIZE</span>
             <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)} aria-label="Close study window">×</button>
           </div>
           <div className="subtitle-mode-switch" aria-label="Subtitle display mode">

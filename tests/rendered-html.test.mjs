@@ -119,10 +119,30 @@ test("renders the five-mode Language Lab index", async () => {
   assert.match(html, /PASTE YOUTUBE OR SPOTIFY LINK/);
   assert.match(html, /YOUR MEDIA SHELF/);
   assert.match(html, /RECENT 7 DAYS/);
-  assert.match(html, /FLOATING STUDY WINDOW/);
-  assert.match(html, /ENGLISH.*中文.*BILINGUAL/s);
-  assert.match(html, /MOVE · RESIZE/);
-  assert.match(html, /data-language-tools-root/);
+  assert.doesNotMatch(html, /ALL IMPORTS/);
+  assert.match(html, /Open floating study tools/);
+  assert.doesNotMatch(html, /MOVE · RESIZE/);
+});
+
+test("keeps all three subtitle modes inside the collapsed study companion", async () => {
+  const { access, readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../app/components/floating-study-window.tsx", import.meta.url), "utf8");
+  assert.match(source, /ENGLISH.*中文.*BILINGUAL/s);
+  assert.match(source, /data-language-tools-root/);
+  assert.match(source, /pomeranian-assistant\.png/);
+  await access(new URL("../public/brand/pomeranian-assistant.png", import.meta.url));
+});
+
+test("ships the selected favicon and three logo concepts", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const assets = await Promise.all([
+    readFile(new URL("../public/favicon.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/brand/logo-concept-a.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/brand/logo-concept-b.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/brand/logo-concept-c.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/brand/logo-board.svg", import.meta.url), "utf8"),
+  ]);
+  assert.ok(assets.every((asset) => asset.includes("LUCID DREAM")));
 });
 
 test("replaces placeholder routes with an Archive and concrete editorial previews", async () => {

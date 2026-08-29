@@ -29,6 +29,15 @@ export function recentPersonalMedia<T extends Pick<PersonalMediaRecord, "created
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export function expiredPersonalMediaIds<T extends Pick<PersonalMediaRecord, "id" | "createdAt">>(
+  items: readonly T[],
+  now = Date.now(),
+  days = 7,
+): string[] {
+  const oldest = now - Math.max(1, days) * DAY_MS;
+  return items.filter((item) => item.createdAt < oldest || item.createdAt > now).map((item) => item.id);
+}
+
 const RESOURCE_ID = /^[A-Za-z0-9_-]{3,128}$/;
 const SPOTIFY_KINDS = new Set<PersonalMediaKind>(["track", "album", "playlist", "artist", "show", "episode"]);
 

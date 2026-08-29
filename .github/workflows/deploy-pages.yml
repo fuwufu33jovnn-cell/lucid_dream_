@@ -38,6 +38,8 @@ jobs:
 
       - name: Build static site
         run: npx next build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /lucid_dream_
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

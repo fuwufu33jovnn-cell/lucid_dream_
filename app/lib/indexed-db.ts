@@ -101,6 +101,17 @@ export async function putRecord<T extends StoredRecord>(
   });
 }
 
+export async function deleteRecord(storeName: StoreName, key: string): Promise<void> {
+  const database = await openLucidDb();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(storeName, "readwrite");
+    transaction.objectStore(storeName).delete(key);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB delete failed."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB delete was aborted."));
+  });
+}
+
 export async function getAllRecords<T extends StoredRecord>(
   storeName: StoreName,
 ): Promise<T[]> {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAllRecords, putRecord } from "../lib/indexed-db";
-import { parsePersonalMediaUrl, recentPersonalMedia, type PersonalMediaRecord } from "../lib/personal-media";
+import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
+import { expiredPersonalMediaIds, parsePersonalMediaUrl, recentPersonalMedia, type PersonalMediaRecord } from "../lib/personal-media";
 import { FloatingStudyWindow } from "./floating-study-window";
 
 export function PersonalMediaShelf() {
@@ -11,14 +11,15 @@ export function PersonalMediaShelf() {
   const [items, setItems] = useState<PersonalMediaRecord[]>([]);
   const [selected, setSelected] = useState<PersonalMediaRecord | null>(null);
   const [status, setStatus] = useState("SAVED ONLY ON THIS DEVICE");
-  const [showRecent, setShowRecent] = useState(true);
 
   useEffect(() => {
     let active = true;
     void getAllRecords<PersonalMediaRecord>("personal-media")
       .then((records) => {
         if (!active) return;
-        const ordered = records.sort((a, b) => b.createdAt - a.createdAt);
+        const expiredIds = expiredPersonalMediaIds(records);
+        const ordered = recentPersonalMedia(records);
+        void Promise.all(expiredIds.map((id) => deleteRecord("personal-media", id))).catch(() => undefined);
         setItems(ordered);
         setSelected(ordered[0] ?? null);
       })
@@ -52,7 +53,7 @@ export function PersonalMediaShelf() {
     }
   }
 
-  const visibleItems = showRecent ? recentPersonalMedia(items) : items;
+  const visibleItems = recentPersonalMedia(items);
 
   return (
     <section className="personal-media-shelf" aria-labelledby="personal-media-title">
@@ -67,10 +68,7 @@ export function PersonalMediaShelf() {
       </div>
       <div className="personal-media-body">
         <div className="personal-media-index" aria-label="Imported media">
-          <div className="personal-media-scope" aria-label="Import history scope">
-            <button className={showRecent ? "is-active" : ""} type="button" onClick={() => setShowRecent(true)}>RECENT 7 DAYS</button>
-            <button className={!showRecent ? "is-active" : ""} type="button" onClick={() => setShowRecent(false)}>ALL IMPORTS</button>
-          </div>
+          <div className="personal-media-scope" aria-label="Import history scope">RECENT 7 DAYS</div>
           {visibleItems.map((item, index) => (
             <button className={selected?.id === item.id ? "is-active" : ""} type="button" key={item.id} onClick={() => setSelected(item)}>
               <span>{String(index + 1).padStart(2, "0")}</span><strong>{item.title}</strong><small>{item.provider} / {item.kind}</small>
@@ -89,7 +87,7 @@ export function PersonalMediaShelf() {
           )}
         </div>
       </div>
-      <FloatingStudyWindow activityId={selected?.id ?? "personal-media"} title={selected?.title ?? "YOUR MEDIA"} defaultOpen />
+      <FloatingStudyWindow activityId={selected?.id ?? "personal-media"} title={selected?.title ?? "YOUR MEDIA"} />
       <p className="personal-media-status" role="status">{status}</p>
     </section>
   );

@@ -24,7 +24,7 @@ import {
 } from "../app/lib/editorial.ts";
 import { normalizeDictionaryResponse, normalizeSelection } from "../app/lib/language-tools.ts";
 import { validateGeneratedPlan, validateSpeakingFeedback, validateWritingFeedback } from "../app/lib/ai-contracts.ts";
-import { parsePersonalMediaUrl, recentPersonalMedia } from "../app/lib/personal-media.ts";
+import { expiredPersonalMediaIds, parsePersonalMediaUrl, recentPersonalMedia } from "../app/lib/personal-media.ts";
 
 test("10-minute plan stays tiny enough to start", () => {
   assert.deepEqual(buildTodayPlan(10).map((task) => task.minutes), [5, 5]);
@@ -190,6 +190,17 @@ test("personal media links become privacy-aware YouTube and Spotify embeds", () 
     sourceUrl: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
     embedUrl: "https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M",
   });
+});
+
+test("personal media keeps only the latest seven days and identifies expired imports", () => {
+  const now = 10 * 86_400_000;
+  const items = [
+    { id: "fresh", createdAt: now - 2 * 86_400_000 },
+    { id: "edge", createdAt: now - 7 * 86_400_000 },
+    { id: "expired", createdAt: now - 8 * 86_400_000 },
+  ];
+  assert.deepEqual(recentPersonalMedia(items, now).map((item) => item.id), ["fresh", "edge"]);
+  assert.deepEqual(expiredPersonalMediaIds(items, now), ["expired"]);
 });
 
 test("personal media parser rejects lookalike domains and unsupported links", () => {
