@@ -26,7 +26,12 @@ export type ExamSnapshot = {
   currentQuestion: string;
   lastSavedAt: number;
   submitted: boolean;
+  mode: ExamMode;
+  pausedAt: number | null;
+  pausedRemainingSeconds: number | null;
 };
+
+export type ExamMode = "practice" | "mock";
 
 export const REALISTIC_READING_MOCK: ReadingMock = {
   id: "realistic-reading-01",
@@ -98,7 +103,7 @@ export const REALISTIC_READING_MOCK: ReadingMock = {
   ],
 };
 
-export function createExamSnapshot(mockId: string, endAt: number): ExamSnapshot {
+export function createExamSnapshot(mockId: string, endAt: number, mode: ExamMode = "mock"): ExamSnapshot {
   return {
     id: mockId,
     mockId,
@@ -108,6 +113,9 @@ export function createExamSnapshot(mockId: string, endAt: number): ExamSnapshot 
     currentQuestion: REALISTIC_READING_MOCK.questions[0].id,
     lastSavedAt: 0,
     submitted: false,
+    mode,
+    pausedAt: null,
+    pausedRemainingSeconds: null,
   };
 }
 
@@ -127,6 +135,31 @@ export function answerQuestion(
 
 export function remainingSeconds(endAt: number, now: number): number {
   return Math.max(0, Math.ceil((endAt - now) / 1_000));
+}
+
+export function examSecondsLeft(snapshot: ExamSnapshot, now: number): number {
+  return snapshot.pausedRemainingSeconds ?? remainingSeconds(snapshot.endAt, now);
+}
+
+export function pauseExamSnapshot(snapshot: ExamSnapshot, now: number): ExamSnapshot {
+  if ((snapshot.mode ?? "mock") !== "practice" || snapshot.pausedAt != null || snapshot.submitted) return snapshot;
+  return {
+    ...snapshot,
+    pausedAt: now,
+    pausedRemainingSeconds: remainingSeconds(snapshot.endAt, now),
+    lastSavedAt: now,
+  };
+}
+
+export function resumeExamSnapshot(snapshot: ExamSnapshot, now: number): ExamSnapshot {
+  if ((snapshot.mode ?? "mock") !== "practice" || snapshot.pausedRemainingSeconds == null) return snapshot;
+  return {
+    ...snapshot,
+    endAt: now + snapshot.pausedRemainingSeconds * 1_000,
+    pausedAt: null,
+    pausedRemainingSeconds: null,
+    lastSavedAt: now,
+  };
 }
 
 export function systemNow(): number {

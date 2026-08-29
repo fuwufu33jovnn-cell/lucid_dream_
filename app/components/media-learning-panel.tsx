@@ -1,4 +1,5 @@
 import type { EditorialActivity } from "../lib/editorial";
+import { FloatingStudyWindow } from "./floating-study-window";
 
 export function MediaLearningPanel({ activity }: { activity: EditorialActivity }) {
   return (
@@ -20,6 +21,7 @@ export function MediaLearningPanel({ activity }: { activity: EditorialActivity }
         {activity.learningText.map((line) => <p key={line.id}>{line.text}</p>)}
       </div>
       <a className="official-source-link" href={activity.sourceUrl} target="_blank" rel="noreferrer">OPEN OFFICIAL SOURCE ↗</a>
+      <FloatingStudyWindow activityId={activity.id} title={activity.title} initialText={activity.learningText.map((line) => line.text).join("\n")} />
     </section>
   );
 }

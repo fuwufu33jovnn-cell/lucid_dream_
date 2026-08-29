@@ -118,6 +118,10 @@ test("renders the five-mode Language Lab index", async () => {
   assert.match(html, /OPEN OFFICIAL SOURCE/);
   assert.match(html, /PASTE YOUTUBE OR SPOTIFY LINK/);
   assert.match(html, /YOUR MEDIA SHELF/);
+  assert.match(html, /RECENT 7 DAYS/);
+  assert.match(html, /FLOATING STUDY WINDOW/);
+  assert.match(html, /ENGLISH.*中文.*BILINGUAL/s);
+  assert.match(html, /MOVE · RESIZE/);
   assert.match(html, /data-language-tools-root/);
 });
 
@@ -154,4 +158,19 @@ test("renders honest writing and speaking studios before AI is configured", asyn
   const speakingHtml = await speaking.text();
   assert.match(speakingHtml, /SPEAKING<br\/>STUDIO/);
   assert.doesNotMatch(speakingHtml, /pronunciation score/i);
+});
+
+test("offers calm Practice and strict Mock exam modes", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("exam-modes", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/ielts/", { headers: { accept: "text/html" } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  const html = await response.text();
+  assert.match(html, /PRACTICE MODE/);
+  assert.match(html, /MOCK MODE/);
+  assert.match(html, /Pause whenever you need/);
 });

@@ -113,6 +113,15 @@ export function filterEditorialActivities(
   });
 }
 
+export function availableContentKinds(
+  items: readonly EditorialActivity[],
+  mode: LabMode,
+): ContentKind[] {
+  const order: ContentKind[] = ["Movie", "Music", "Design", "Language", "Culture"];
+  const available = new Set(items.filter((item) => item.mode === mode).map((item) => item.contentKind));
+  return order.filter((kind) => available.has(kind));
+}
+
 export function summarizeActivityProgress(
   records: ReadonlyArray<Pick<ActivityProgress, "id" | "savedLanguage" | "completedAt">>,
 ): { started: number; completed: number; phrases: number } {

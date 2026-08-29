@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   EDITORIAL_ACTIVITIES,
   LAB_MODES,
+  availableContentKinds,
   filterEditorialActivities,
   type EditorialActivity,
   type LabMode,
@@ -12,10 +13,7 @@ import { getRecord, putRecord } from "../lib/indexed-db";
 import type { ActivityProgress } from "../lib/models";
 import type { ContentKind } from "../lib/editorial-types";
 import { MediaLearningPanel } from "./media-learning-panel";
-import { LanguageToolPopover } from "./language-tool-popover";
 import { PersonalMediaShelf } from "./personal-media-shelf";
-
-const CONTENT_FILTERS: Array<"All" | ContentKind> = ["All", "Movie", "Music", "Design", "Language", "Culture"];
 
 function emptyProgress(id: string): ActivityProgress {
   return { id, notice: "", savedLanguage: "", shadowNote: "", speakingOutline: "", completedAt: null, updatedAt: 0 };
@@ -30,6 +28,7 @@ export function EditorialLab() {
   const [selected, setSelected] = useState<EditorialActivity>(EDITORIAL_ACTIVITIES[0]);
   const [progress, setProgress] = useState<ActivityProgress>(() => emptyProgress(EDITORIAL_ACTIVITIES[0].id));
   const [saveState, setSaveState] = useState("Checking this device…");
+  const contentFilters = useMemo<Array<"All" | ContentKind>>(() => ["All", ...availableContentKinds(EDITORIAL_ACTIVITIES, mode)], [mode]);
 
   const results = useMemo(() => filterEditorialActivities(EDITORIAL_ACTIVITIES, mode, query)
     .filter((item) => contentKind === "All" || item.contentKind === contentKind)
@@ -69,17 +68,15 @@ export function EditorialLab() {
 
   function chooseMode(nextMode: LabMode) {
     setMode(nextMode);
+    setContentKind("All");
     const first = EDITORIAL_ACTIVITIES.find((item) => item.mode === nextMode);
     if (first) chooseActivity(first);
   }
 
   function chooseContentKind(nextKind: "All" | ContentKind) {
     setContentKind(nextKind);
-    const first = EDITORIAL_ACTIVITIES.find((item) => nextKind === "All" || item.contentKind === nextKind);
-    if (first) {
-      setMode(first.mode);
-      chooseActivity(first);
-    }
+    const first = EDITORIAL_ACTIVITIES.find((item) => item.mode === mode && (nextKind === "All" || item.contentKind === nextKind));
+    if (first) chooseActivity(first);
   }
 
   async function updateProgress(field: keyof Pick<ActivityProgress, "notice" | "savedLanguage" | "shadowNote" | "speakingOutline">, value: string) {
@@ -114,7 +111,7 @@ export function EditorialLab() {
       </div>
 
       <div className="content-kind-strip" aria-label="Content collections">
-        {CONTENT_FILTERS.map((kind) => (
+        {contentFilters.map((kind) => (
           <button className={contentKind === kind ? "is-active" : ""} key={kind} type="button" onClick={() => chooseContentKind(kind)}>{kind.toUpperCase()}</button>
         ))}
       </div>
@@ -135,7 +132,7 @@ export function EditorialLab() {
               <span className="lab-item-meta">{item.level}<br />{item.minutes} MIN<br />↗</span>
             </button>
           ))}
-          {results.length === 0 && <p className="lab-empty">Nothing in this drawer. Try a looser search.</p>}
+          {results.length === 0 && <div className="lab-empty"><strong>NOTHING IN THIS DRAWER.</strong><span>Your place will not jump. Clear the smaller filters or search.</span><button type="button" onClick={() => { setQuery(""); setLevel("All"); setMinutes("All"); setContentKind("All"); }}>CLEAR SMALLER FILTERS</button></div>}
         </div>
 
         <aside className="lab-dossier" aria-label="Selected activity dossier">
@@ -147,7 +144,6 @@ export function EditorialLab() {
           </div>
           <div className="dossier-fields">
             <MediaLearningPanel activity={selected} />
-            <LanguageToolPopover activityId={selected.id} />
             <label><span>01 / NOTICE</span><p>{selected.prompts.notice}</p><textarea rows={3} value={progress.notice} onChange={(event) => void updateProgress("notice", event.target.value)} placeholder="Three details, expressions, or choices…" /></label>
             <label><span>02 / WORDS</span><p>{selected.prompts.words}</p><textarea rows={3} value={progress.savedLanguage} onChange={(event) => void updateProgress("savedLanguage", event.target.value)} placeholder="The phrase + your own example…" /></label>
             <label><span>03 / SHADOW</span><p>{selected.prompts.shadow}</p><textarea rows={3} value={progress.shadowNote} onChange={(event) => void updateProgress("shadowNote", event.target.value)} placeholder="What changed on the third repetition?" /></label>

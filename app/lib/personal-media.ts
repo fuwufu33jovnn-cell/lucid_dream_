@@ -16,6 +16,19 @@ export type PersonalMediaRecord = StoredRecord & ParsedPersonalMedia & {
   createdAt: number;
 };
 
+const DAY_MS = 86_400_000;
+
+export function recentPersonalMedia<T extends Pick<PersonalMediaRecord, "createdAt">>(
+  items: readonly T[],
+  now = Date.now(),
+  days = 7,
+): T[] {
+  const oldest = now - Math.max(1, days) * DAY_MS;
+  return items
+    .filter((item) => item.createdAt >= oldest && item.createdAt <= now)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
 const RESOURCE_ID = /^[A-Za-z0-9_-]{3,128}$/;
 const SPOTIFY_KINDS = new Set<PersonalMediaKind>(["track", "album", "playlist", "artist", "show", "episode"]);
 

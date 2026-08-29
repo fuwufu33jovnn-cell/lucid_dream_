@@ -4,7 +4,10 @@ import { buildTodayPlan } from "../app/lib/today.ts";
 import {
   answerQuestion,
   createExamSnapshot,
+  examSecondsLeft,
+  pauseExamSnapshot,
   remainingSeconds,
+  resumeExamSnapshot,
 } from "../app/lib/exam.ts";
 import { SEED_LIBRARY } from "../app/lib/seeds.ts";
 import {
@@ -15,12 +18,13 @@ import {
 import {
   EDITORIAL_ACTIVITIES,
   LAB_MODES,
+  availableContentKinds,
   filterEditorialActivities,
   summarizeActivityProgress,
 } from "../app/lib/editorial.ts";
 import { normalizeDictionaryResponse, normalizeSelection } from "../app/lib/language-tools.ts";
 import { validateGeneratedPlan, validateSpeakingFeedback, validateWritingFeedback } from "../app/lib/ai-contracts.ts";
-import { parsePersonalMediaUrl } from "../app/lib/personal-media.ts";
+import { parsePersonalMediaUrl, recentPersonalMedia } from "../app/lib/personal-media.ts";
 
 test("10-minute plan stays tiny enough to start", () => {
   assert.deepEqual(buildTodayPlan(10).map((task) => task.minutes), [5, 5]);
@@ -58,6 +62,19 @@ test("answering a question returns a new checkpoint without mutating the old one
   assert.equal(updated.lastSavedAt, 1_234);
   assert.equal(snapshot.answers.q1, undefined);
   assert.equal(updated.endAt, 1_200_000);
+});
+
+test("practice timers can pause without losing time while mock timers stay strict", () => {
+  const practice = createExamSnapshot("realistic-reading-01", 1_200_000, "practice");
+  const paused = pauseExamSnapshot(practice, 300_000);
+  assert.equal(paused.pausedRemainingSeconds, 900);
+  assert.equal(examSecondsLeft(paused, 900_000), 900);
+  const resumed = resumeExamSnapshot(paused, 1_000_000);
+  assert.equal(resumed.endAt, 1_900_000);
+  assert.equal(examSecondsLeft(resumed, 1_100_000), 800);
+
+  const mock = createExamSnapshot("realistic-reading-01", 1_200_000, "mock");
+  assert.deepEqual(pauseExamSnapshot(mock, 300_000), mock);
 });
 
 test("seed library contains 24 unique, actionable, rights-aware records", () => {
@@ -112,6 +129,14 @@ test("editorial library has distinct Movie and Music collections with learning t
 test("editorial activity filtering combines mode and a case-insensitive query", () => {
   const results = filterEditorialActivities(EDITORIAL_ACTIVITIES, "Read", "MOMA");
   assert.deepEqual(results.map((item) => item.id), ["moma-magazine"]);
+});
+
+test("each Language Lab mode exposes only child collections that contain entries", () => {
+  for (const mode of LAB_MODES) {
+    const kinds = availableContentKinds(EDITORIAL_ACTIVITIES, mode);
+    assert.ok(kinds.length > 0);
+    assert.ok(kinds.every((kind) => EDITORIAL_ACTIVITIES.some((item) => item.mode === mode && item.contentKind === kind)));
+  }
 });
 
 test("marginalia never masquerades as real community reviews", () => {
@@ -171,4 +196,15 @@ test("personal media parser rejects lookalike domains and unsupported links", ()
   assert.equal(parsePersonalMediaUrl("https://open.spotify.com.evil.example/track/abc"), null);
   assert.equal(parsePersonalMediaUrl("https://youtube.com/channel/abc"), null);
   assert.equal(parsePersonalMediaUrl("not a url"), null);
+});
+
+test("recent personal media contains only the last seven days in newest-first order", () => {
+  const day = 86_400_000;
+  const now = 20 * day;
+  const records = [
+    { id: "old", createdAt: now - 8 * day },
+    { id: "today", createdAt: now - 100 },
+    { id: "week", createdAt: now - 7 * day },
+  ];
+  assert.deepEqual(recentPersonalMedia(records, now).map((item) => item.id), ["today", "week"]);
 });

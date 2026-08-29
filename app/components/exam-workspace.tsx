@@ -5,8 +5,11 @@ import {
   REALISTIC_READING_MOCK,
   answerQuestion,
   createExamSnapshot,
-  remainingSeconds,
+  examSecondsLeft,
+  pauseExamSnapshot,
+  resumeExamSnapshot,
   systemNow,
+  type ExamMode,
   type ExamSnapshot,
 } from "../lib/exam";
 import { getRecord, isIndexedDbAvailable, putRecord } from "../lib/indexed-db";
@@ -24,6 +27,7 @@ export function ExamWorkspace() {
   const [recoverable, setRecoverable] = useState<ExamSnapshot | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("checking");
   const [secondsLeft, setSecondsLeft] = useState(REALISTIC_READING_MOCK.durationSeconds);
+  const [launchMode, setLaunchMode] = useState<ExamMode>("practice");
 
   useEffect(() => {
     let active = true;
@@ -43,8 +47,9 @@ export function ExamWorkspace() {
 
   useEffect(() => {
     if (!snapshot) return;
-    const update = () => setSecondsLeft(remainingSeconds(snapshot.endAt, systemNow()));
+    const update = () => setSecondsLeft(examSecondsLeft(snapshot, systemNow()));
     update();
+    if (snapshot.pausedAt != null) return;
     const timer = window.setInterval(update, 1_000);
     return () => window.clearInterval(timer);
   }, [snapshot]);
@@ -53,7 +58,8 @@ export function ExamWorkspace() {
     ? Math.max(0, REALISTIC_READING_MOCK.questions.findIndex((item) => item.id === snapshot.currentQuestion))
     : 0, [snapshot]);
   const currentQuestion = REALISTIC_READING_MOCK.questions[currentIndex];
-  const locked = Boolean(snapshot?.submitted) || secondsLeft === 0;
+  const paused = snapshot?.pausedAt != null;
+  const locked = Boolean(snapshot?.submitted) || secondsLeft === 0 || paused;
 
   async function persist(next: ExamSnapshot) {
     setSnapshot(next);
@@ -64,14 +70,23 @@ export function ExamWorkspace() {
     } catch { setSaveState("unavailable"); }
   }
 
-  async function startNew() {
+  async function startNew(mode: ExamMode = launchMode) {
     const now = systemNow();
     const next = createExamSnapshot(
       REALISTIC_READING_MOCK.id,
       now + REALISTIC_READING_MOCK.durationSeconds * 1_000,
+      mode,
     );
     setRecoverable(null);
     setSecondsLeft(REALISTIC_READING_MOCK.durationSeconds);
+    await persist(next);
+  }
+
+  async function togglePause() {
+    if (!snapshot || (snapshot.mode ?? "mock") !== "practice" || snapshot.submitted) return;
+    const now = systemNow();
+    const next = snapshot.pausedAt == null ? pauseExamSnapshot(snapshot, now) : resumeExamSnapshot(snapshot, now);
+    setSecondsLeft(examSecondsLeft(next, now));
     await persist(next);
   }
 
@@ -110,9 +125,17 @@ export function ExamWorkspace() {
           {recoverable && (
             <button className="primary-action" type="button" onClick={resume}>Resume saved attempt</button>
           )}
+          <div className="exam-mode-picker" aria-label="Choose IELTS session mode">
+            <button className={launchMode === "practice" ? "is-active" : ""} type="button" onClick={() => setLaunchMode("practice")}>
+              <strong>PRACTICE MODE</strong><span>Pause whenever you need. Lower pressure.</span>
+            </button>
+            <button className={launchMode === "mock" ? "is-active" : ""} type="button" onClick={() => setLaunchMode("mock")}>
+              <strong>MOCK MODE</strong><span>Strict timer. No pause, like test day.</span>
+            </button>
+          </div>
           <button className={recoverable ? "secondary-action" : "primary-action"} type="button"
-            disabled={saveState === "checking" || saveState === "unavailable"} onClick={() => void startNew()}>
-            Start 20-minute practice
+            disabled={saveState === "checking" || saveState === "unavailable"} onClick={() => void startNew(launchMode)}>
+            Start {launchMode === "practice" ? "calm practice" : "timed mock"}
           </button>
           <p className={`storage-proof ${saveState}`} role="status">
             {saveState === "checking" && "正在检查本地保存能力…"}
@@ -128,8 +151,9 @@ export function ExamWorkspace() {
   return (
     <section className="exam-shell" aria-label="IELTS Reading computer practice">
       <div className="exam-bar">
-        <div><span>READING</span><strong>{REALISTIC_READING_MOCK.title}</strong></div>
+        <div><span>READING · {(snapshot.mode ?? "mock").toUpperCase()} MODE</span><strong>{REALISTIC_READING_MOCK.title}</strong></div>
         <div className={`exam-save ${saveState}`} role="status">{saveState === "saving" ? "Saving…" : saveState === "unavailable" ? "Save failed" : "Saved locally"}</div>
+        {(snapshot.mode ?? "mock") === "practice" && <button className="exam-pause" type="button" onClick={() => void togglePause()}>{paused ? "RESUME" : "PAUSE"}</button>}
         <div className={secondsLeft < 120 ? "exam-timer is-low" : "exam-timer"} aria-label={`${secondsLeft} seconds remaining`}>{formatTime(secondsLeft)}</div>
       </div>
 
@@ -164,7 +188,7 @@ export function ExamWorkspace() {
               <label className="short-answer"><span>{currentQuestion.placeholder}</span><input disabled={locked} value={snapshot.answers[currentQuestion.id] ?? ""} onChange={(event) => void updateAnswer(event.target.value)} /></label>
             )}
           </div>
-          {locked && <div className="exam-locked" role="status">{snapshot.submitted ? "Attempt submitted and locked." : "Time ended. Your last saved answers remain on this device."}</div>}
+          {locked && <div className="exam-locked" role="status">{snapshot.submitted ? "Attempt submitted and locked." : paused ? "Practice paused. Your place and timer are safe." : "Time ended. Your last saved answers remain on this device."}</div>}
         </section>
       </div>
 
