@@ -8,6 +8,14 @@ export default function TodayPage() {
   return (
     <AppShell active="today">
       <article className="issue-home">
+        <section className="today-inside practice-first">
+          <div className="section-rule-heading">
+            <p>TODAY&apos;S PRACTICE</p>
+            <span>Choose the version of today you can actually finish.</span>
+          </div>
+          <TodayBoard />
+        </section>
+
         <header className="issue-hero">
           <div className="issue-title-block">
             <p className="issue-kicker"><span>VOL. 01</span><span>ISSUE 08</span><span>THE NIGHT EDITION</span></p>
@@ -46,14 +54,6 @@ export default function TodayPage() {
               <li><span>03</span>worth keeping</li>
             </ol>
           </article>
-        </section>
-
-        <section className="today-inside">
-          <div className="section-rule-heading">
-            <p>TODAY, INSIDE THE ISSUE</p>
-            <span>Choose the version of today you can actually finish.</span>
-          </div>
-          <TodayBoard />
         </section>
       </article>
     </AppShell>

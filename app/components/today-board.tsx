@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { getRecord, isIndexedDbAvailable, putRecord } from "../lib/indexed-db";
 import type { PlanMode, StoredRecord, TodayTask } from "../lib/models";
 import { buildTodayPlan } from "../lib/today";
+import { requestAi } from "../lib/ai-client";
+import { validateGeneratedPlan, type GeneratedPlan } from "../lib/ai-contracts";
 
 type PreferenceRecord = StoredRecord & { value: PlanMode };
 type TodayRecord = StoredRecord & { completed: string[] };
@@ -49,9 +52,11 @@ export function TodayBoard() {
   const [replacements, setReplacements] = useState<Record<string, number>>({});
   const [ready, setReady] = useState(false);
   const [saveState, setSaveState] = useState<"loading" | "saved" | "saving" | "unavailable">("loading");
+  const [aiTasks, setAiTasks] = useState<TodayTask[] | null>(null);
+  const [reshapeState, setReshapeState] = useState("AI NOT CONNECTED");
   const dayId = `today-${localDateKey()}`;
   const baseTasks = useMemo(() => buildTodayPlan(mode), [mode]);
-  const tasks = baseTasks.map((task) => {
+  const tasks = (aiTasks ?? baseTasks).map((task) => {
     const alternatives = ALTERNATES[task.minutes] ?? [];
     const index = replacements[task.id];
     return index === undefined || alternatives.length === 0
@@ -84,6 +89,7 @@ export function TodayBoard() {
     setMode(nextMode);
     setCompleted([]);
     setReplacements({});
+    setAiTasks(null);
     if (saveState === "unavailable") return;
     setSaveState("saving");
     try {
@@ -93,6 +99,16 @@ export function TodayBoard() {
       ]);
       setSaveState("saved");
     } catch { setSaveState("unavailable"); }
+  }
+
+  async function reshapeWithAi() {
+    setReshapeState("RESHAPING…");
+    const result = await requestAi<GeneratedPlan>({ capability: "daily-plan", minutes: mode, focus: "balanced IELTS and international work English", evidence: [] });
+    if (!result.ok) { setReshapeState(result.message); return; }
+    if (!validateGeneratedPlan(result.data, mode)) { setReshapeState("INVALID PLAN — ORIGINAL KEPT"); return; }
+    setAiTasks(result.data.tasks);
+    setReshapeState("AI PLAN READY");
+    try { await putRecord("generated-plans", { id: dayId, tasks: result.data.tasks, createdAt: Date.now() }); } catch { /* The plan remains usable for this session. */ }
   }
 
   async function toggleTask(taskId: string) {
@@ -135,6 +151,8 @@ export function TodayBoard() {
           {saveState === "saved" && "Saved on this device"}
           {saveState === "unavailable" && "Device saving unavailable"}
         </div>
+        <button className="reshape-button" type="button" onClick={() => void reshapeWithAi()}>RESHAPE WITH AI</button>
+        <span className="reshape-state" role="status">{reshapeState}</span>
       </div>
 
       {saveState === "unavailable" && (
@@ -155,7 +173,7 @@ export function TodayBoard() {
               <button className="task-check" type="button" onClick={() => void toggleTask(task.id)} aria-pressed={done} aria-label={`${done ? "Mark incomplete" : "Mark complete"}: ${task.title}`}>
                 {done ? "✓" : String(index + 1).padStart(2, "0")}
               </button>
-              <div className="task-copy"><span>{task.module}</span><h2>{task.title}</h2><p>{task.detail}</p></div>
+              <div className="task-copy"><span>{task.module}</span><h2>{task.title}</h2><p>{task.detail}</p><Link className="task-open" href={task.href}>OPEN PRACTICE ↗</Link></div>
               <div className="task-meta"><strong>{task.minutes}</strong><span>MIN</span><button type="button" onClick={() => replaceTask(task)}>换一个</button></div>
             </article>
           );

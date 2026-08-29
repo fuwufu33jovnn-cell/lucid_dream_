@@ -1,5 +1,7 @@
 import type { ActivityProgress } from "./models.ts";
 import { SEED_LIBRARY, type SeedActivity, type SeedLevel } from "./seeds.ts";
+import { CULTURAL_ACTIVITIES } from "./cultural-library.ts";
+import type { ContentKind, EditorialPrompts, LearningLine, SourceKind } from "./editorial-types.ts";
 
 export const LAB_MODES = ["Watch", "Listen", "Read", "Culture", "Random"] as const;
 export type LabMode = (typeof LAB_MODES)[number];
@@ -13,13 +15,12 @@ export type EditorialActivity = {
   sourceUrl: string;
   level: SeedLevel;
   minutes: 5 | 15 | 30;
+  contentKind: ContentKind;
+  sourceKind: SourceKind;
+  youtubeId?: string;
+  learningText: LearningLine[];
   editorialNote: string;
-  prompts: {
-    notice: string;
-    words: string;
-    shadow: string;
-    talk: string;
-  };
+  prompts: EditorialPrompts;
   usageBasis: string;
   marginaliaLabel: "Fictional editorial marginalia";
   marginalia: readonly string[];
@@ -71,6 +72,12 @@ function toEditorialActivity(seed: SeedActivity): EditorialActivity {
     sourceUrl: seed.sourceUrl,
     level: seed.level,
     minutes: seed.minutes,
+    contentKind: seed.category === "Design" ? "Design" : seed.category === "Culture" ? "Culture" : "Language",
+    sourceKind: "external",
+    learningText: [
+      { id: `${seed.id}-a`, text: seed.prompt },
+      { id: `${seed.id}-b`, text: `Use the source to complete this output: ${seed.output}` },
+    ],
     editorialNote: NOTES_BY_MODE[mode],
     prompts: {
       notice: seed.prompt,
@@ -88,7 +95,10 @@ function toEditorialActivity(seed: SeedActivity): EditorialActivity {
   };
 }
 
-export const EDITORIAL_ACTIVITIES: readonly EditorialActivity[] = SEED_LIBRARY.map(toEditorialActivity);
+export const EDITORIAL_ACTIVITIES: readonly EditorialActivity[] = [
+  ...SEED_LIBRARY.map(toEditorialActivity),
+  ...CULTURAL_ACTIVITIES,
+];
 
 export function filterEditorialActivities(
   items: readonly EditorialActivity[],

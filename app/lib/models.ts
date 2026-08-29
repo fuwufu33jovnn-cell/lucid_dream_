@@ -9,6 +9,7 @@ export type TodayTask = {
   detail: string;
   minutes: number;
   accent: "blue" | "coral" | "sage";
+  href: string;
 };
 
 export type StoredRecord = { id: string; [key: string]: unknown };
@@ -20,4 +21,11 @@ export type ActivityProgress = StoredRecord & {
   speakingOutline: string;
   completedAt: number | null;
   updatedAt: number;
+};
+
+export type VocabularyRecord = StoredRecord & {
+  selection: string;
+  sourceActivityId: string;
+  context: string;
+  createdAt: number;
 };

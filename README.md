@@ -1,4 +1,14 @@
-# vinext-starter
+# LUCID DREAM
+
+## Optional AI practice gateway
+
+The site works without AI. Dictionary lookup, fixed daily plans, drafts, transcripts, and saved vocabulary remain device-local. When the gateway is not configured, the interface deliberately displays `AI NOT CONNECTED`.
+
+AI requests are designed for the Supabase Edge Function at `supabase/functions/ai-practice`. Configure `OPENAI_API_KEY` and `OPENAI_TEXT_MODEL` only as Supabase Function secrets. Never place them in a public `.env` file or browser build. The frontend receives only `NEXT_PUBLIC_AI_GATEWAY_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+The gateway uses the OpenAI Responses API with strict Structured Outputs, validates each capability, limits payloads, applies a short per-instance rate limit, restricts CORS, and times provider calls out after 25 seconds. Speaking feedback is transcript-only in this phase and therefore never returns a pronunciation assessment.
+
+## Runtime foundation
 
 A clean full-stack starter running on
 [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
