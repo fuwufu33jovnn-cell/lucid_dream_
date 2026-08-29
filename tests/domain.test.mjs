@@ -18,6 +18,9 @@ import {
   filterEditorialActivities,
   summarizeActivityProgress,
 } from "../app/lib/editorial.ts";
+import { normalizeDictionaryResponse, normalizeSelection } from "../app/lib/language-tools.ts";
+import { validateGeneratedPlan, validateSpeakingFeedback, validateWritingFeedback } from "../app/lib/ai-contracts.ts";
+import { parsePersonalMediaUrl } from "../app/lib/personal-media.ts";
 
 test("10-minute plan stays tiny enough to start", () => {
   assert.deepEqual(buildTodayPlan(10).map((task) => task.minutes), [5, 5]);
@@ -35,6 +38,12 @@ test("90-minute plan totals exactly 90 minutes", () => {
   const plan = buildTodayPlan(90);
   assert.equal(plan.reduce((sum, task) => sum + task.minutes, 0), 90);
   assert.equal(plan.length, 5);
+});
+
+test("every daily task opens a real local practice surface", () => {
+  for (const mode of [10, 45, 90]) {
+    assert.ok(buildTodayPlan(mode).every((task) => task.href.startsWith("/")));
+  }
 });
 
 test("exam timer derives from a fixed deadline and never becomes negative", () => {
@@ -91,6 +100,15 @@ test("editorial activities can be browsed through the five approved lab modes", 
   assert.equal(new Set(EDITORIAL_ACTIVITIES.map((item) => item.id)).size, EDITORIAL_ACTIVITIES.length);
 });
 
+test("editorial library has distinct Movie and Music collections with learning text", () => {
+  assert.ok(EDITORIAL_ACTIVITIES.length >= 50);
+  assert.ok(EDITORIAL_ACTIVITIES.filter((item) => item.contentKind === "Music").length >= 15);
+  assert.ok(EDITORIAL_ACTIVITIES.filter((item) => item.contentKind === "Movie").length >= 15);
+  assert.ok(EDITORIAL_ACTIVITIES.every((item) => item.sourceUrl.startsWith("https://")));
+  assert.ok(EDITORIAL_ACTIVITIES.every((item) => item.learningText.length >= 2));
+  assert.ok(EDITORIAL_ACTIVITIES.every((item) => !/full transcript|full lyrics/i.test(item.usageBasis)));
+});
+
 test("editorial activity filtering combines mode and a case-insensitive query", () => {
   const results = filterEditorialActivities(EDITORIAL_ACTIVITIES, "Read", "MOMA");
   assert.deepEqual(results.map((item) => item.id), ["moma-magazine"]);
@@ -108,4 +126,49 @@ test("activity progress summary counts saved language and completions independen
     { id: "c", savedLanguage: "visual rhythm", completedAt: null },
   ]);
   assert.deepEqual(summary, { started: 3, completed: 1, phrases: 2 });
+});
+
+test("language tool normalizes selections and dictionary results", () => {
+  assert.equal(normalizeSelection("  visual\n rhythm  "), "visual rhythm");
+  assert.equal(normalizeSelection("x".repeat(400)).length, 280);
+  const entry = normalizeDictionaryResponse([{ word: "rhythm", phonetic: "/ˈrɪðəm/", meanings: [{ partOfSpeech: "noun", definitions: [{ definition: "a repeated pattern" }] }] }]);
+  assert.equal(entry.word, "rhythm");
+  assert.equal(entry.meanings[0].definition, "a repeated pattern");
+});
+
+test("AI responses are accepted only when their promised evidence is present", () => {
+  assert.equal(validateGeneratedPlan({ tasks: [{ id: "a", module: "Speaking", title: "Retell", detail: "Retell one clip.", minutes: 10, href: "/practice/speaking/", accent: "coral" }] }, 10), true);
+  assert.equal(validateGeneratedPlan({ tasks: [{ minutes: 20 }] }, 10), false);
+  assert.equal(validateWritingFeedback({ unofficial: true, bandRange: "5.5–6.0", criteria: [], corrections: [], nextActions: [] }), true);
+  assert.equal(validateSpeakingFeedback({ unofficial: true, audioAnalyzed: false, pronunciation: null, observations: [], alternatives: [], nextAttempt: "Try again." }), true);
+});
+
+test("personal media links become privacy-aware YouTube and Spotify embeds", () => {
+  assert.deepEqual(parsePersonalMediaUrl("https://www.youtube.com/watch?v=abc_DEF-123"), {
+    provider: "youtube",
+    kind: "video",
+    resourceId: "abc_DEF-123",
+    sourceUrl: "https://www.youtube.com/watch?v=abc_DEF-123",
+    embedUrl: "https://www.youtube-nocookie.com/embed/abc_DEF-123",
+  });
+  assert.deepEqual(parsePersonalMediaUrl("https://www.youtube.com/playlist?list=PL123abc_DEF"), {
+    provider: "youtube",
+    kind: "playlist",
+    resourceId: "PL123abc_DEF",
+    sourceUrl: "https://www.youtube.com/playlist?list=PL123abc_DEF",
+    embedUrl: "https://www.youtube-nocookie.com/embed/videoseries?list=PL123abc_DEF",
+  });
+  assert.deepEqual(parsePersonalMediaUrl("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=test"), {
+    provider: "spotify",
+    kind: "playlist",
+    resourceId: "37i9dQZF1DXcBWIGoYBM5M",
+    sourceUrl: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
+    embedUrl: "https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M",
+  });
+});
+
+test("personal media parser rejects lookalike domains and unsupported links", () => {
+  assert.equal(parsePersonalMediaUrl("https://open.spotify.com.evil.example/track/abc"), null);
+  assert.equal(parsePersonalMediaUrl("https://youtube.com/channel/abc"), null);
+  assert.equal(parsePersonalMediaUrl("not a url"), null);
 });

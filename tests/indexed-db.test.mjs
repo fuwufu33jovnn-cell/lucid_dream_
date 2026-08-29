@@ -35,11 +35,37 @@ test("creates every durable object store in one versioned database", async () =>
   assert.deepEqual(Array.from(database.objectStoreNames), [
     "activity-progress",
     "examSessions",
+    "generated-plans",
     "library",
+    "personal-media",
     "portfolio",
     "preferences",
+    "speaking-practice",
     "today",
+    "vocabulary",
+    "writing-practice",
   ]);
+});
+
+test("persists imported personal media without downloading its content", async () => {
+  const record = {
+    id: "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M",
+    provider: "spotify",
+    kind: "playlist",
+    resourceId: "37i9dQZF1DXcBWIGoYBM5M",
+    sourceUrl: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
+    embedUrl: "https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M",
+    title: "Focus playlist",
+    createdAt: 10,
+  };
+  await repository.putRecord("personal-media", record);
+  assert.deepEqual(await repository.getRecord("personal-media", record.id), record);
+});
+
+test("persists a selected word with its short source context", async () => {
+  const record = { id: "word-1", selection: "visual rhythm", sourceActivityId: "movie-1", context: "The film builds a visual rhythm.", createdAt: 10 };
+  await repository.putRecord("vocabulary", record);
+  assert.equal((await repository.getRecord("vocabulary", "word-1")).selection, "visual rhythm");
 });
 
 test("persists the four-part language dossier and completion evidence", async () => {

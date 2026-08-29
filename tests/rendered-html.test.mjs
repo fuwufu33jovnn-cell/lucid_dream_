@@ -66,7 +66,9 @@ test("renders the LUCID DREAM product shell", async () => {
   assert.match(html, /Life Abroad/);
   assert.match(html, /ISSUE 08/);
   assert.match(html, /NIGHT<br\/>RADIO/);
-  assert.match(html, /TODAY, INSIDE THE ISSUE/);
+  assert.match(html, /TODAY'S PRACTICE/);
+  assert.match(html, /OPEN PRACTICE/);
+  assert.ok(html.indexOf("TODAY&#x27;S PRACTICE") < html.indexOf("NIGHT<br/>RADIO"));
   assert.doesNotMatch(html, />Dreamer</);
   assert.doesNotMatch(html, /Starter Project/);
 });
@@ -111,6 +113,12 @@ test("renders the five-mode Language Lab index", async () => {
     assert.match(html, new RegExp(`>${mode}<`));
   }
   assert.match(html, /MARGINALIA/);
+  assert.match(html, />MOVIE</);
+  assert.match(html, />MUSIC</);
+  assert.match(html, /OPEN OFFICIAL SOURCE/);
+  assert.match(html, /PASTE YOUTUBE OR SPOTIFY LINK/);
+  assert.match(html, /YOUR MEDIA SHELF/);
+  assert.match(html, /data-language-tools-root/);
 });
 
 test("replaces placeholder routes with an Archive and concrete editorial previews", async () => {
@@ -130,4 +138,20 @@ test("replaces placeholder routes with an Archive and concrete editorial preview
 
   const life = await worker.fetch(new Request("http://localhost/life-abroad/", { headers: { accept: "text/html" } }), env, ctx);
   assert.match(await life.text(), /PRACTICAL ENGLISH FOR REAL LIFE/);
+});
+
+test("renders honest writing and speaking studios before AI is configured", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("practice", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const env = { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  const writing = await worker.fetch(new Request("http://localhost/practice/writing/", { headers: { accept: "text/html" } }), env, ctx);
+  const writingHtml = await writing.text();
+  assert.match(writingHtml, /WRITING<br\/>STUDIO/);
+  assert.match(writingHtml, /AI NOT CONNECTED/);
+  const speaking = await worker.fetch(new Request("http://localhost/practice/speaking/", { headers: { accept: "text/html" } }), env, ctx);
+  const speakingHtml = await speaking.text();
+  assert.match(speakingHtml, /SPEAKING<br\/>STUDIO/);
+  assert.doesNotMatch(speakingHtml, /pronunciation score/i);
 });

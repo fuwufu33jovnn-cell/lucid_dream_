@@ -6,10 +6,15 @@ export type StoreName =
   | "examSessions"
   | "library"
   | "portfolio"
-  | "activity-progress";
+  | "activity-progress"
+  | "vocabulary"
+  | "writing-practice"
+  | "speaking-practice"
+  | "generated-plans"
+  | "personal-media";
 
 const DATABASE_NAME = "lucid-dream";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 4;
 const STORES: StoreName[] = [
   "activity-progress",
   "preferences",
@@ -17,6 +22,11 @@ const STORES: StoreName[] = [
   "examSessions",
   "library",
   "portfolio",
+  "vocabulary",
+  "writing-practice",
+  "speaking-practice",
+  "generated-plans",
+  "personal-media",
 ];
 
 let databasePromise: Promise<IDBDatabase> | null = null;
