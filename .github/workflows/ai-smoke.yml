@@ -1,0 +1,23 @@
+name: Production AI smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ai-smoke.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call production AI route
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --max-time 30 \
+            -X POST "https://lucid-dream-nu.vercel.app/api/ai" \
+            -H "content-type: application/json" \
+            --data '{"capability":"explain","selection":"visual rhythm","context":"The layout has visual rhythm."}')"
+          node -e 'const body=JSON.parse(process.argv[1]); if(typeof body.text!=="string"||!body.text.trim()){console.error("Unexpected AI response:", body); process.exit(1)} console.log("AI smoke test passed.")' "$response"
