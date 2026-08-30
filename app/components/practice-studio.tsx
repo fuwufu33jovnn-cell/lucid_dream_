@@ -75,7 +75,7 @@ export function PracticeStudio({ kind }: { kind: "writing" | "speaking" }) {
         </div>
         <aside className="feedback-panel">
           <p>UNOFFICIAL PRACTICE FEEDBACK</p>
-          {!writingFeedback && !speakingFeedback && <div className="feedback-empty"><strong>AI NOT CONNECTED</strong><span>Your prompt and response can still be written and saved on this device.</span></div>}
+          {!writingFeedback && !speakingFeedback && <div className="feedback-empty"><strong>{status}</strong><span>Your prompt and response can still be written and saved on this device.</span></div>}
           {writingFeedback && <><h2>Unofficial estimate</h2><p>{writingFeedback.bandRange ?? "Not scored for this task type"}</p><h2>What works</h2>{writingFeedback.criteria.map((item) => <p key={item.heading}><strong>{item.heading}</strong> {item.observation}</p>)}<h2>Priority corrections</h2>{writingFeedback.corrections.map((item) => <p key={item.original}>{item.original} → {item.revision}<br /><small>{item.explanation}</small></p>)}<h2>Next practice</h2><ul>{writingFeedback.nextActions.map((item) => <li key={item}>{item}</li>)}</ul></>}
           {speakingFeedback && <><h2>Fluency and clarity</h2>{speakingFeedback.observations.map((item) => <p key={item}>{item}</p>)}<h2>Vocabulary and grammar</h2><p>Review the alternatives below and keep only the ones that sound like you.</p><h2>Natural alternatives</h2><ul>{speakingFeedback.alternatives.map((item) => <li key={item}>{item}</li>)}</ul><h2>Next attempt</h2><p>{speakingFeedback.nextAttempt}</p></>}
         </aside>

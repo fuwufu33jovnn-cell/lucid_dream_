@@ -12,6 +12,10 @@ type HandlerDependencies = {
 
 const MAX_REQUEST_BYTES = 65_536;
 const PROVIDER_TIMEOUT_MS = 8_000;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+
+const requestBuckets = new Map<string, { count: number; resetAt: number }>();
 
 export function getConfiguredProviders(env: GatewayEnv): Provider[] {
   const providers: Array<[Provider, string | undefined]> = [
@@ -22,8 +26,38 @@ export function getConfiguredProviders(env: GatewayEnv): Provider[] {
   return providers.filter(([, key]) => Boolean(key?.trim())).map(([provider]) => provider);
 }
 
-function json(body: unknown, status = 200): Response {
-  return Response.json(body, { status, headers: { "cache-control": "no-store" } });
+function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+  return Response.json(body, {
+    status,
+    headers: { "cache-control": "no-store", ...headers },
+  });
+}
+
+function isCrossSiteBrowserRequest(request: Request): boolean {
+  if (request.headers.get("sec-fetch-site") === "cross-site") return true;
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).origin !== new URL(request.url).origin;
+  } catch {
+    return true;
+  }
+}
+
+function isRateLimited(request: Request): boolean {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const clientId = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+  const now = Date.now();
+  const current = requestBuckets.get(clientId);
+
+  if (!current || now >= current.resetAt) {
+    requestBuckets.set(clientId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  if (current.count >= RATE_LIMIT_MAX_REQUESTS) return true;
+  current.count += 1;
+  return false;
 }
 
 function schemaFor(capability: string): Record<string, unknown> {
@@ -37,7 +71,7 @@ function schemaFor(capability: string): Record<string, unknown> {
   };
   if (capability === "writing-feedback") return {
     type: "object", additionalProperties: false, required: ["unofficial", "bandRange", "criteria", "corrections", "revisedSample", "nextActions"], properties: {
-      unofficial: { type: "boolean", enum: [true] }, bandRange: { anyOf: [{ type: "string" }, { type: "null" }] },
+      unofficial: { type: "boolean", enum: [true] }, bandRange: { type: ["string", "null"] },
       criteria: { type: "array", items: { type: "object", additionalProperties: false, required: ["heading", "observation"], properties: { heading: { type: "string" }, observation: { type: "string" } } } },
       corrections: { type: "array", items: { type: "object", additionalProperties: false, required: ["original", "revision", "explanation"], properties: { original: { type: "string" }, revision: { type: "string" }, explanation: { type: "string" } } } },
       revisedSample: { type: "string" }, nextActions: stringArray,
@@ -117,21 +151,46 @@ async function callProvider(provider: Provider, key: string, request: Record<str
     init = { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(request) }] }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema } }) };
   } else if (provider === "openai") {
     url = "https://api.openai.com/v1/responses";
-    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.OPENAI_TEXT_MODEL ?? "gpt-5-mini", instructions, input: JSON.stringify(request), text: { format: { type: "json_schema", name: `lucid_${capability.replaceAll("-", "_")}`, strict: true, schema } } }) };
+    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.OPENAI_TEXT_MODEL ?? "gpt-5.6-luna", reasoning: { effort: "none" }, instructions, input: JSON.stringify(request), text: { format: { type: "json_schema", name: `lucid_${capability.replaceAll("-", "_")}`, strict: true, schema } } }) };
   } else {
     url = "https://api.deepseek.com/chat/completions";
-    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.DEEPSEEK_MODEL ?? "deepseek-v4-flash", messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }], response_format: { type: "json_object" }, max_tokens: 3_000 }) };
+    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.DEEPSEEK_MODEL ?? "deepseek-v4-flash", thinking: { type: "disabled" }, messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }], response_format: { type: "json_object" }, max_tokens: 3_000 }) };
   }
 
   try {
     const response = await fetchWithTimeout(fetcher, url, init);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn("[ai] provider request failed", { provider, capability, status: response.status });
+      return null;
+    }
     const payload = await response.json() as Record<string, unknown>;
     const text = extractProviderText(provider, payload);
-    if (!text) return null;
-    const value = JSON.parse(text) as unknown;
-    return validResult(capability, value, request) ? value : null;
-  } catch {
+    if (!text) {
+      console.warn("[ai] provider returned no usable text", { provider, capability });
+      return null;
+    }
+
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      console.warn("[ai] provider returned invalid JSON", { provider, capability });
+      return null;
+    }
+
+    if (!validResult(capability, value, request)) {
+      console.warn("[ai] provider output failed validation", { provider, capability });
+      return null;
+    }
+
+    console.info("[ai] provider success", { provider, capability });
+    return value;
+  } catch (error) {
+    console.warn("[ai] provider request threw", {
+      provider,
+      capability,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return null;
   }
 }
@@ -139,6 +198,8 @@ async function callProvider(provider: Provider, key: string, request: Record<str
 export function createAiHandler({ env, fetch: fetcher }: HandlerDependencies) {
   return async function handleAiRequest(request: Request): Promise<Response> {
     if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+    if (isCrossSiteBrowserRequest(request)) return json({ error: "Cross-site requests are not allowed." }, 403);
+    if (isRateLimited(request)) return json({ error: "Too many AI requests. Try again shortly." }, 429, { "retry-after": "60" });
     if (Number(request.headers.get("content-length") ?? 0) > MAX_REQUEST_BYTES) return json({ error: "Request too large." }, 413);
     const raw = await request.text();
     if (new TextEncoder().encode(raw).byteLength > MAX_REQUEST_BYTES) return json({ error: "Request too large." }, 413);
@@ -156,9 +217,9 @@ export function createAiHandler({ env, fetch: fetcher }: HandlerDependencies) {
     if (getConfiguredProviders(env).length === 0) return json({ error: "AI is not configured yet." }, 503);
 
     for (const [provider, key] of providers) {
-      if (!key) continue;
-      const result = await callProvider(provider, key, parsed.value, env, fetcher);
-      if (result !== null) return json(result);
+      if (!key?.trim()) continue;
+      const result = await callProvider(provider, key.trim(), parsed.value, env, fetcher);
+      if (result !== null) return json(result, 200, { "x-lucid-ai-provider": provider });
     }
     return json({ error: "AI providers are temporarily unavailable." }, 502);
   };

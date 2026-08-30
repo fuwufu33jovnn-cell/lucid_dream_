@@ -43,13 +43,15 @@ test("AI gateway reports a missing server configuration without exposing secret 
 
 test("AI gateway falls back from Gemini to OpenAI and returns validated JSON", async () => {
   const urls = [];
+  let openAiBody;
   const handler = createAiHandler({
     env: { GEMINI_API_KEY: "gemini-test", OPENAI_API_KEY: "openai-test" },
-    fetch: async (url) => {
+    fetch: async (url, init) => {
       urls.push(String(url));
       if (String(url).includes("generativelanguage.googleapis.com")) {
         return Response.json({ error: { message: "temporary" } }, { status: 503 });
       }
+      openAiBody = JSON.parse(String(init?.body ?? "{}"));
       return Response.json({ output_text: JSON.stringify({ text: "A repeated visual pattern that guides the eye." }) });
     },
   });
@@ -60,17 +62,21 @@ test("AI gateway falls back from Gemini to OpenAI and returns validated JSON", a
   assert.equal(urls.length, 2);
   assert.match(urls[0], /generativelanguage\.googleapis\.com/);
   assert.match(urls[1], /api\.openai\.com\/v1\/responses/);
+  assert.equal(openAiBody.model, "gpt-5.6-luna");
+  assert.deepEqual(openAiBody.reasoning, { effort: "none" });
 });
 
 test("AI gateway skips malformed provider output and tries DeepSeek", async () => {
   const urls = [];
+  let deepSeekBody;
   const handler = createAiHandler({
     env: { GEMINI_API_KEY: "gemini-test", DEEPSEEK_API_KEY: "deepseek-test" },
-    fetch: async (url) => {
+    fetch: async (url, init) => {
       urls.push(String(url));
       if (String(url).includes("googleapis.com")) {
         return Response.json({ candidates: [{ content: { parts: [{ text: "not json" }] } }] });
       }
+      deepSeekBody = JSON.parse(String(init?.body ?? "{}"));
       return Response.json({ choices: [{ message: { content: JSON.stringify({ text: "A concise Chinese explanation." }) } }] });
     },
   });
@@ -80,4 +86,26 @@ test("AI gateway skips malformed provider output and tries DeepSeek", async () =
   assert.deepEqual(await response.json(), { text: "A concise Chinese explanation." });
   assert.equal(urls.length, 2);
   assert.match(urls[1], /api\.deepseek\.com\/chat\/completions/);
+  assert.deepEqual(deepSeekBody.thinking, { type: "disabled" });
+});
+
+test("AI gateway blocks cross-site browser posts before provider calls", async () => {
+  let providerCalls = 0;
+  const handler = createAiHandler({
+    env: { GEMINI_API_KEY: "gemini-test" },
+    fetch: async () => { providerCalls += 1; return new Response("{}"); },
+  });
+
+  const response = await handler(new Request("https://lucid.example/api/ai", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://evil.example",
+      "sec-fetch-site": "cross-site",
+    },
+    body: JSON.stringify({ capability: "explain", selection: "visual rhythm", context: "The layout has visual rhythm." }),
+  }));
+
+  assert.equal(response.status, 403);
+  assert.equal(providerCalls, 0);
 });

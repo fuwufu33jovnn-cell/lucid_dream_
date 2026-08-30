@@ -29,6 +29,7 @@ export async function requestAi<T>(request: AiRequest): Promise<AiResponse<T>> {
       signal: controller.signal,
     });
     if (response.status === 503) return { ok: false, code: "not-connected", message: "AI NOT CONNECTED" };
+    if (response.status === 429) return { ok: false, code: "request-failed", message: "AI is busy for a moment. Try again shortly." };
     if (!response.ok) return { ok: false, code: "request-failed", message: `AI request failed (${response.status}).` };
     const data = await response.json() as T;
     return { ok: true, data };
