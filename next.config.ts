@@ -4,7 +4,7 @@ const githubPagesBasePath =
   process.env.GITHUB_ACTIONS === "true" ? "/lucid_dream_" : "";
 
 const nextConfig: NextConfig = {
-  output: "export",
+  output: process.env.GITHUB_ACTIONS === "true" ? "export" : undefined,
   basePath: githubPagesBasePath,
   assetPrefix: githubPagesBasePath || undefined,
   images: { unoptimized: true },
