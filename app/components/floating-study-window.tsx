@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { requestAi } from "../lib/ai-client";
 import { putRecord } from "../lib/indexed-db";
 import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../lib/language-tools";
+import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
 
 type SubtitleMode = "english" | "chinese" | "bilingual";
 const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const pomeranianIdleSrc = `${publicBasePath}/brand/pomeranian-idle.png`;
+const pomeranianWinkSrc = `${publicBasePath}/brand/pomeranian-wink.png`;
 
 export function FloatingStudyWindow({
   activityId,
@@ -21,6 +24,8 @@ export function FloatingStudyWindow({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [launcherAnimating, setLauncherAnimating] = useState(false);
+  const [launcherImageFailed, setLauncherImageFailed] = useState(false);
+  const [launcherPosition, setLauncherPosition] = useState({ x: 10, y: 120 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [mode, setMode] = useState<SubtitleMode>("bilingual");
   const [english, setEnglish] = useState(initialText);
@@ -30,8 +35,21 @@ export function FloatingStudyWindow({
   const [message, setMessage] = useState("Paste a short study transcript, then select or type a word.");
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const launcherTimer = useRef<number | null>(null);
+  const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
 
   useEffect(() => setEnglish(initialText), [activityId, initialText]);
+  useEffect(() => {
+    new Image().src = pomeranianWinkSrc;
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(LAUNCHER_STORAGE_KEY) ?? "null");
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) setLauncherPosition(clampLauncherPosition(saved, viewport));
+      else setLauncherPosition({ x: viewport.width - 54, y: Math.max(90, viewport.height * .34) });
+    } catch { setLauncherPosition({ x: viewport.width - 54, y: Math.max(90, viewport.height * .34) }); }
+    const keepOnScreen = () => setLauncherPosition((value) => clampLauncherPosition(value, { width: window.innerWidth, height: window.innerHeight }));
+    window.addEventListener("resize", keepOnScreen);
+    return () => window.removeEventListener("resize", keepOnScreen);
+  }, []);
   useEffect(() => () => {
     if (launcherTimer.current != null) window.clearTimeout(launcherTimer.current);
   }, []);
@@ -45,6 +63,31 @@ export function FloatingStudyWindow({
       setLauncherAnimating(false);
       launcherTimer.current = null;
     }, reduceMotion ? 0 : 700);
+  }
+
+  function startLauncherDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    launcherDrag.current = { pointerId: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin: launcherPosition, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveLauncher(event: React.PointerEvent<HTMLButtonElement>) {
+    const state = launcherDrag.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    state.moved ||= hasLauncherMoved(state.start, { x: event.clientX, y: event.clientY });
+    if (!state.moved) return;
+    setLauncherPosition(clampLauncherPosition({ x: state.origin.x + event.clientX - state.start.x, y: state.origin.y + event.clientY - state.start.y }, { width: window.innerWidth, height: window.innerHeight }));
+  }
+
+  function finishLauncherDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const state = launcherDrag.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    launcherDrag.current = null;
+    if (!state.moved) { toggleStudyWindow(); return; }
+    setLauncherPosition((value) => {
+      const snapped = snapLauncherPosition(value, { width: window.innerWidth, height: window.innerHeight });
+      window.localStorage.setItem(LAUNCHER_STORAGE_KEY, JSON.stringify(snapped));
+      return snapped;
+    });
   }
 
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
@@ -90,13 +133,12 @@ export function FloatingStudyWindow({
   }
 
   return (
-    <div className="floating-study-root">
-      <button className={`floating-study-launcher${launcherAnimating ? " is-animating" : ""}`} type="button" onClick={toggleStudyWindow} aria-expanded={open} disabled={launcherAnimating}>
-        <img src={`${publicBasePath}/brand/${launcherAnimating ? "pomeranian-wink.png" : "pomeranian-idle.png"}`} alt="" aria-hidden="true" />
+    <div className="floating-study-root" style={{ "--launcher-x": `${launcherPosition.x}px`, "--launcher-y": `${launcherPosition.y}px` } as React.CSSProperties}>
+      <button className={`floating-study-launcher${launcherAnimating ? " is-animating" : ""}`} type="button" onPointerDown={startLauncherDrag} onPointerMove={moveLauncher} onPointerUp={finishLauncherDrag} onPointerCancel={() => { launcherDrag.current = null; }} aria-expanded={open}>
+        {!launcherImageFailed ? <img src={launcherAnimating ? pomeranianWinkSrc : pomeranianIdleSrc} alt="" aria-hidden="true" draggable={false} onError={() => setLauncherImageFailed(true)} /> : <span className="pomeranian-fallback" aria-hidden="true">🐶</span>}
         <span className="sr-only">{open ? "Close floating study tools" : "Open floating study tools"}</span>
       </button>
-      {open && (
-        <aside className="floating-study-window" style={{ transform: `translate(${position.x}px, ${position.y}px)` }} aria-label={`Floating study tools for ${title}`}>
+        <aside className={`floating-study-window${open ? " is-open" : ""}`} style={{ "--window-x": `${position.x}px`, "--window-y": `${position.y}px`, transformOrigin: launcherPosition.x < 400 ? "left bottom" : "right bottom" } as React.CSSProperties} aria-hidden={!open} inert={!open ? true : undefined} aria-label={`Floating study tools for ${title}`}>
           <div className="floating-study-handle" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => { drag.current = null; }}>
             <div><span>FLOATING STUDY WINDOW</span><strong>{title}</strong></div>
             <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)} aria-label="Close study window">×</button>
@@ -118,7 +160,6 @@ export function FloatingStudyWindow({
           {entry && <p className="floating-dictionary-result"><strong>{entry.word} {entry.phonetic}</strong><br />{entry.meanings[0]?.definition}</p>}
           <small className="subtitle-honesty">YouTube captions are not copied automatically. This window stores only study text you add on this device.</small>
         </aside>
-      )}
     </div>
   );
 }

@@ -133,7 +133,15 @@ test("keeps all three subtitle modes inside the collapsed study companion", asyn
   assert.match(source, /pomeranian-idle\.png/);
   assert.match(source, /pomeranian-wink\.png/);
   assert.match(source, /launcherAnimating/);
+  assert.match(source, /launcherPosition/);
+  assert.match(source, /setPointerCapture/);
+  assert.match(source, /localStorage/);
+  assert.match(source, /onError/);
   assert.match(css, /pomeranian-wiggle/);
+  assert.match(css, /width:\s*44px[\s\S]*height:\s*44px/);
+  assert.match(css, /floating-study-launcher img[^}]*width:\s*24px/);
+  assert.match(css, /floating-study-window\.is-open/);
+  assert.match(css, /cubic-bezier\(\.22,\s*1,\s*\.36,\s*1\)/);
   assert.match(css, /prefers-reduced-motion:\s*reduce[\s\S]*floating-study-launcher\.is-animating/);
   await access(new URL("../public/brand/pomeranian-idle.png", import.meta.url));
   await access(new URL("../public/brand/pomeranian-wink.png", import.meta.url));
