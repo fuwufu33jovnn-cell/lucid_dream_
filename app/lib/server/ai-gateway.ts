@@ -146,7 +146,7 @@ async function callProvider(provider: Provider, key: string, request: Record<str
   let init: RequestInit;
 
   if (provider === "gemini") {
-    const model = env.GEMINI_MODEL ?? "gemini-2.5-flash";
+    const model = env.GEMINI_MODEL ?? "gemini-3.7-flash";
     url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     init = { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(request) }] }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: schema } }) };
   } else if (provider === "openai") {
