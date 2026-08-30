@@ -15,6 +15,7 @@ test("build wrapper can enter the Sites environment when helper scripts lose exe
   await writeFile(join(scripts, "sites-env.sh"), "#!/usr/bin/env bash\nshift\nSITES_ENV_READY=1 SITES_PROJECT_ROOT=\"$TEST_PROJECT_ROOT\" exec \"$@\"\n");
   await writeFile(join(scripts, "validate-artifact.sh"), "#!/usr/bin/env bash\nexit 0\n");
   await writeFile(join(bin, "vinext"), "#!/usr/bin/env bash\nexit 0\n");
+  await chmod(join(scripts, "build-verified.sh"), 0o644);
   await chmod(join(scripts, "sites-env.sh"), 0o644);
   await chmod(join(scripts, "validate-artifact.sh"), 0o755);
   await chmod(join(bin, "vinext"), 0o755);
