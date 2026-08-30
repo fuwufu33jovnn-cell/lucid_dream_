@@ -127,7 +127,7 @@ export function FloatingStudyWindow({
       return;
     }
     const result = await requestAi<{ text: string }>({ capability: action, selection: normalized, context: english.slice(0, 320) });
-    if (!result.ok) { setMessage(`${result.message} · Gemini/千问 gateway can be connected later.`); return; }
+    if (!result.ok) { setMessage(result.message); return; }
     setMessage(result.data.text);
     if (action === "translate" && !chinese) setChinese(result.data.text);
   }
