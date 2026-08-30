@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAiHandler } from "../app/lib/server/ai-gateway.ts";
+import { createAiHandler, getConfiguredProviders } from "../app/lib/server/ai-gateway.ts";
 
 const explainRequest = () => new Request("https://lucid.example/api/ai", {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ capability: "explain", selection: "visual rhythm", context: "The layout has visual rhythm." }),
+});
+
+test("AI gateway status reports configured providers without exposing keys", () => {
+  assert.deepEqual(getConfiguredProviders({
+    GEMINI_API_KEY: "gemini-secret",
+    OPENAI_API_KEY: "  ",
+    DEEPSEEK_API_KEY: "deepseek-secret",
+  }), ["gemini", "deepseek"]);
 });
 
 test("AI gateway rejects malformed capability payloads before calling a provider", async () => {
