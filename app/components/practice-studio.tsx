@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { requestAi } from "../lib/ai-client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getAiStatus, requestAi } from "../lib/ai-client";
 import { validateSpeakingFeedback, validateWritingFeedback, type SpeakingFeedback, type WritingFeedback } from "../lib/ai-contracts";
 import { putRecord } from "../lib/indexed-db";
 
@@ -17,6 +17,15 @@ export function PracticeStudio({ kind }: { kind: "writing" | "speaking" }) {
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const wordCount = useMemo(() => response.trim() ? response.trim().split(/\s+/).length : 0, [response]);
+
+  useEffect(() => {
+    let active = true;
+    void getAiStatus().then((aiStatus) => {
+      if (!active) return;
+      setStatus(aiStatus.configured ? `AI READY · ${aiStatus.providers.map((provider) => provider.toUpperCase()).join(" / ")}` : "AI NOT CONNECTED");
+    });
+    return () => { active = false; };
+  }, []);
 
   async function save() {
     await putRecord(writing ? "writing-practice" : "speaking-practice", { id: `${kind}-${Date.now()}`, prompt, response, taskType, updatedAt: Date.now() });
