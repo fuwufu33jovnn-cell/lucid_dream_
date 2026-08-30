@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getRecord, isIndexedDbAvailable, putRecord } from "../lib/indexed-db";
 import type { PlanMode, StoredRecord, TodayTask } from "../lib/models";
 import { buildTodayPlan } from "../lib/today";
-import { requestAi } from "../lib/ai-client";
+import { getAiStatus, requestAi } from "../lib/ai-client";
 import { validateGeneratedPlan, type GeneratedPlan } from "../lib/ai-contracts";
 
 type PreferenceRecord = StoredRecord & { value: PlanMode };
@@ -66,6 +66,10 @@ export function TodayBoard() {
 
   useEffect(() => {
     let active = true;
+    void getAiStatus().then((status) => {
+      if (!active) return;
+      setReshapeState(status.configured ? `AI READY · ${status.providers.map((provider) => provider.toUpperCase()).join(" / ")}` : "AI NOT CONNECTED");
+    });
     async function restore() {
       if (!(await isIndexedDbAvailable())) {
         if (active) { setSaveState("unavailable"); setReady(true); }
