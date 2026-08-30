@@ -13,6 +13,15 @@ type HandlerDependencies = {
 const MAX_REQUEST_BYTES = 65_536;
 const PROVIDER_TIMEOUT_MS = 8_000;
 
+export function getConfiguredProviders(env: GatewayEnv): Provider[] {
+  const providers: Array<[Provider, string | undefined]> = [
+    ["gemini", env.GEMINI_API_KEY],
+    ["openai", env.OPENAI_API_KEY],
+    ["deepseek", env.DEEPSEEK_API_KEY],
+  ];
+  return providers.filter(([, key]) => Boolean(key?.trim())).map(([provider]) => provider);
+}
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
@@ -144,7 +153,7 @@ export function createAiHandler({ env, fetch: fetcher }: HandlerDependencies) {
       ["openai", env.OPENAI_API_KEY],
       ["deepseek", env.DEEPSEEK_API_KEY],
     ];
-    if (!providers.some(([, key]) => key)) return json({ error: "AI is not configured yet." }, 503);
+    if (getConfiguredProviders(env).length === 0) return json({ error: "AI is not configured yet." }, 503);
 
     for (const [provider, key] of providers) {
       if (!key) continue;
