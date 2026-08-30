@@ -27,3 +27,27 @@ test("build wrapper can enter the Sites environment when helper scripts lose exe
 
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("build wrapper produces Next.js output on Vercel instead of a Sites artifact", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lucid-vercel-build-"));
+  const scripts = join(root, "scripts");
+  const bin = join(root, "node_modules", ".bin");
+  await mkdir(scripts, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await cp(new URL("../scripts/build-verified.sh", import.meta.url), join(scripts, "build-verified.sh"));
+  await writeFile(join(scripts, "validate-artifact.sh"), "#!/usr/bin/env bash\nexit 0\n");
+  await writeFile(join(bin, "next"), "#!/usr/bin/env bash\necho next-build\n");
+  await writeFile(join(bin, "vinext"), "#!/usr/bin/env bash\necho vinext-build\n");
+  await chmod(join(scripts, "validate-artifact.sh"), 0o755);
+  await chmod(join(bin, "next"), 0o755);
+  await chmod(join(bin, "vinext"), 0o755);
+
+  const result = spawnSync("bash", [join(scripts, "build-verified.sh")], {
+    encoding: "utf8",
+    env: { ...process.env, VERCEL: "1", SITES_ENV_READY: "1", SITES_PROJECT_ROOT: root, PATH: `${bin}:${process.env.PATH}` },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /next-build/);
+  assert.doesNotMatch(result.stdout, /vinext-build/);
+});
