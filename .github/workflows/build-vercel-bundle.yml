@@ -1,0 +1,32 @@
+name: Build Vercel source bundle
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Pack source
+        run: |
+          tar --exclude='.git' --exclude='source.tar.gz' -czf /tmp/source.tar.gz .
+
+      - name: Publish temporary bundle branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan vercel-bundle
+          git rm -rf .
+          cp /tmp/source.tar.gz source.tar.gz
+          printf '%s\n' "${GITHUB_SHA}" > source-sha.txt
+          git add -f source.tar.gz source-sha.txt
+          git commit -m "chore: refresh Vercel source bundle"
+          git push --force origin vercel-bundle
