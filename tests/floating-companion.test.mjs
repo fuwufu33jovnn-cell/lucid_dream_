@@ -18,8 +18,10 @@ test("launcher art inherits the GitHub Pages base path and uses a springy compac
   const { readFile } = await import("node:fs/promises");
   const config = await readFile(new URL("../next.config.ts", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const source = await readFile(new URL("../app/components/floating-study-window.tsx", import.meta.url), "utf8");
   assert.match(config, /env:\s*\{[\s\S]*NEXT_PUBLIC_BASE_PATH:\s*githubPagesBasePath/);
   assert.match(css, /\.floating-study-launcher\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/s);
   assert.match(css, /@keyframes\s+pomeranian-press/);
   assert.match(css, /cubic-bezier\(\.16,\s*1,\s*\.3,\s*1\)/);
+  assert.match(source, /setLauncherAnimating\(true\);\s*setOpen\(\(value\) => !value\);\s*launcherTimer\.current = window\.setTimeout/s);
 });
