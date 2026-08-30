@@ -58,11 +58,11 @@ export function FloatingStudyWindow({
     if (launcherAnimating) return;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     setLauncherAnimating(true);
+    setOpen((value) => !value);
     launcherTimer.current = window.setTimeout(() => {
-      setOpen((value) => !value);
       setLauncherAnimating(false);
       launcherTimer.current = null;
-    }, reduceMotion ? 0 : 700);
+    }, reduceMotion ? 0 : 520);
   }
 
   function startLauncherDrag(event: React.PointerEvent<HTMLButtonElement>) {
