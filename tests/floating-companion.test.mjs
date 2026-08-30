@@ -13,3 +13,13 @@ test("launcher remains inside the viewport and snaps to its nearest edge", () =>
   assert.deepEqual(snapLauncherPosition({ x: 120, y: 280 }, viewport), { x: 10, y: 280 });
   assert.deepEqual(snapLauncherPosition({ x: 680, y: 280 }, viewport), { x: 746, y: 280 });
 });
+
+test("launcher art inherits the GitHub Pages base path and uses a springy compact interaction", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const config = await readFile(new URL("../next.config.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(config, /env:\s*\{[\s\S]*NEXT_PUBLIC_BASE_PATH:\s*githubPagesBasePath/);
+  assert.match(css, /\.floating-study-launcher\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/s);
+  assert.match(css, /@keyframes\s+pomeranian-press/);
+  assert.match(css, /cubic-bezier\(\.16,\s*1,\s*\.3,\s*1\)/);
+});
