@@ -537,10 +537,21 @@ body {
 .personal-media-empty p { max-width: 330px; font-size: 9px; letter-spacing: .12em; }
 .personal-media-status { margin: 0; padding: 10px 16px; border-top: 1px solid var(--ink); font-size: 8px; letter-spacing: .1em; }
 .floating-study-root { position: relative; z-index: 12; display: flex; height: 0; justify-content: flex-end; overflow: visible; }
-.floating-study-launcher { position: relative; z-index: 51; display: grid; width: 58px; height: 58px; margin: -29px 16px 0 0; place-content: center; border: 1px solid var(--ink); border-radius: 50%; background: #dfe9ff; box-shadow: 4px 4px 0 var(--ink); cursor: pointer; line-height: 1; transition: transform .18s ease, box-shadow .18s ease; }
+.floating-study-launcher { position: relative; z-index: 51; display: grid; width: 68px; height: 68px; margin: -34px 16px 0 0; place-content: center; border: 1px solid var(--ink); border-radius: 50%; background: #edf5ff; box-shadow: 4px 4px 0 var(--ink); cursor: pointer; line-height: 1; transition: transform .18s ease, box-shadow .18s ease; }
 .floating-study-launcher:hover, .floating-study-launcher:focus-visible { transform: translateY(-3px) rotate(-3deg); box-shadow: 6px 7px 0 var(--acid); }
-.floating-study-launcher img { width: 43px; height: 43px; margin: -5px auto -3px; object-fit: contain; }
-.floating-study-launcher-label { margin-top: 2px; font-size: 6px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.floating-study-launcher:disabled { cursor: wait; }
+.floating-study-launcher img { width: 62px; height: 62px; object-fit: contain; transform-origin: 50% 72%; }
+.floating-study-launcher.is-animating img { animation: pomeranian-wiggle .7s ease-in-out both; }
+@keyframes pomeranian-wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-8deg) scale(1.04); }
+  44% { transform: rotate(7deg) scale(1.05); }
+  68% { transform: rotate(-5deg) scale(1.03); }
+  86% { transform: rotate(3deg) scale(1.01); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-study-launcher.is-animating img { animation: none; }
+}
 .floating-study-window { container-type: inline-size; position: fixed; right: 22px; bottom: 22px; z-index: 50; width: min(480px, calc(100vw - 28px)); min-width: 260px; min-height: 270px; max-width: calc(100vw - 20px); max-height: calc(100vh - 20px); overflow: auto; resize: both; border: 1px solid var(--ink); background: var(--paper-strong); box-shadow: 12px 12px 0 rgba(23,23,23,.22); }
 .floating-study-handle { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; min-height: 54px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--ink); background: var(--ink); color: white; cursor: move; touch-action: none; }
 .floating-study-handle > div { display: grid; }

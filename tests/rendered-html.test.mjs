@@ -127,10 +127,16 @@ test("renders the five-mode Language Lab index", async () => {
 test("keeps all three subtitle modes inside the collapsed study companion", async () => {
   const { access, readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../app/components/floating-study-window.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(source, /ENGLISH.*中文.*BILINGUAL/s);
   assert.match(source, /data-language-tools-root/);
-  assert.match(source, /pomeranian-assistant\.png/);
-  await access(new URL("../public/brand/pomeranian-assistant.png", import.meta.url));
+  assert.match(source, /pomeranian-idle\.png/);
+  assert.match(source, /pomeranian-wink\.png/);
+  assert.match(source, /launcherAnimating/);
+  assert.match(css, /pomeranian-wiggle/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce[\s\S]*floating-study-launcher\.is-animating/);
+  await access(new URL("../public/brand/pomeranian-idle.png", import.meta.url));
+  await access(new URL("../public/brand/pomeranian-wink.png", import.meta.url));
 });
 
 test("ships the selected favicon and three logo concepts", async () => {

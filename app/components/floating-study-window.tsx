@@ -20,6 +20,7 @@ export function FloatingStudyWindow({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [launcherAnimating, setLauncherAnimating] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [mode, setMode] = useState<SubtitleMode>("bilingual");
   const [english, setEnglish] = useState(initialText);
@@ -28,8 +29,23 @@ export function FloatingStudyWindow({
   const [entry, setEntry] = useState<DictionaryEntry | null>(null);
   const [message, setMessage] = useState("Paste a short study transcript, then select or type a word.");
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const launcherTimer = useRef<number | null>(null);
 
   useEffect(() => setEnglish(initialText), [activityId, initialText]);
+  useEffect(() => () => {
+    if (launcherTimer.current != null) window.clearTimeout(launcherTimer.current);
+  }, []);
+
+  function toggleStudyWindow() {
+    if (launcherAnimating) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setLauncherAnimating(true);
+    launcherTimer.current = window.setTimeout(() => {
+      setOpen((value) => !value);
+      setLauncherAnimating(false);
+      launcherTimer.current = null;
+    }, reduceMotion ? 0 : 700);
+  }
 
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
     drag.current = { startX: event.clientX, startY: event.clientY, originX: position.x, originY: position.y };
@@ -75,8 +91,8 @@ export function FloatingStudyWindow({
 
   return (
     <div className="floating-study-root">
-      <button className="floating-study-launcher" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <img src={`${publicBasePath}/brand/pomeranian-assistant.png`} alt="" aria-hidden="true" /><span className="floating-study-launcher-label">{open ? "Close" : "Study"}</span>
+      <button className={`floating-study-launcher${launcherAnimating ? " is-animating" : ""}`} type="button" onClick={toggleStudyWindow} aria-expanded={open} disabled={launcherAnimating}>
+        <img src={`${publicBasePath}/brand/${launcherAnimating ? "pomeranian-wink.png" : "pomeranian-idle.png"}`} alt="" aria-hidden="true" />
         <span className="sr-only">{open ? "Close floating study tools" : "Open floating study tools"}</span>
       </button>
       {open && (
