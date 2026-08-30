@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/ai-smoke.yml"
+      - "app/api/ai/**"
+      - "app/lib/ai-client.ts"
+      - "app/lib/server/ai-gateway.ts"
 
 jobs:
   smoke:
