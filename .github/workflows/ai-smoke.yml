@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl --fail-with-body --silent --show-error --max-time 30 \
+          response="$(curl --location --fail-with-body --silent --show-error --max-time 30 \
             -X POST "https://lucid-dream-nu.vercel.app/api/ai" \
             -H "content-type: application/json" \
             --data '{"capability":"explain","selection":"visual rhythm","context":"The layout has visual rhythm."}')"
