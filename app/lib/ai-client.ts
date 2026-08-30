@@ -1,6 +1,22 @@
 import type { AiRequest } from "./ai-contracts";
 
+export type AiProvider = "gemini" | "openai" | "deepseek";
+export type AiStatus = { configured: boolean; providers: AiProvider[] };
 export type AiResponse<T> = { ok: true; data: T } | { ok: false; code: "not-connected" | "timeout" | "invalid-response" | "request-failed"; message: string };
+
+export async function getAiStatus(): Promise<AiStatus> {
+  try {
+    const response = await fetch("/api/ai", { method: "GET", cache: "no-store" });
+    if (!response.ok) return { configured: false, providers: [] };
+    const data = await response.json() as Partial<AiStatus>;
+    const providers = Array.isArray(data.providers)
+      ? data.providers.filter((provider): provider is AiProvider => provider === "gemini" || provider === "openai" || provider === "deepseek")
+      : [];
+    return { configured: data.configured === true && providers.length > 0, providers };
+  } catch {
+    return { configured: false, providers: [] };
+  }
+}
 
 export async function requestAi<T>(request: AiRequest): Promise<AiResponse<T>> {
   const controller = new AbortController();
