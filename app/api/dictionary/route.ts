@@ -18,7 +18,7 @@ function normalizeDatamuseResponse(input: unknown, requestedWord: string): Dicti
     const rawPart = tab >= 0 ? value.slice(0, tab) : "word";
     const definition = tab >= 0 ? value.slice(tab + 1) : value;
     const partMap: Record<string, string> = { n: "noun", v: "verb", adj: "adjective", adv: "adverb" };
-    return { partOfSpeech: partMap[rawPart] ?? rawPart || "word", definition };
+    return { partOfSpeech: (partMap[rawPart] ?? rawPart) || "word", definition };
   }).filter((value) => Boolean(value.definition.trim()));
   if (meanings.length === 0) return null;
 
