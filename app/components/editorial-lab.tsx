@@ -14,6 +14,7 @@ import type { ActivityProgress } from "../lib/models";
 import type { ContentKind } from "../lib/editorial-types";
 import { MediaLearningPanel } from "./media-learning-panel";
 import { PersonalMediaShelf } from "./personal-media-shelf";
+import { FloatingStudyWindow } from "./floating-study-window";
 
 function emptyProgress(id: string): ActivityProgress {
   return { id, notice: "", savedLanguage: "", shadowNote: "", speakingOutline: "", completedAt: null, updatedAt: 0 };
@@ -102,6 +103,7 @@ export function EditorialLab() {
   return (
     <section className="editorial-lab">
       <PersonalMediaShelf />
+      <FloatingStudyWindow activityId={selected.id} title={selected.title} initialText={selected.learningText.map((line) => line.text).join("\n")} />
       <div className="lab-mode-strip" aria-label="Language Lab modes">
         {LAB_MODES.map((item, index) => (
           <button className={mode === item ? "is-active" : ""} type="button" key={item} onClick={() => chooseMode(item)}>
