@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestAi } from "../lib/ai-client";
 import { putRecord } from "../lib/indexed-db";
 import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../lib/language-tools";
+import { pickNaturalEnglishVoice } from "../lib/pronunciation";
 import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
 
 type SubtitleMode = "english" | "chinese" | "bilingual";
@@ -130,10 +131,14 @@ export function FloatingStudyWindow({
 
   function speakWithBrowserVoice(text: string): boolean {
     if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return false;
+    const voice = pickNaturalEnglishVoice(window.speechSynthesis.getVoices());
+    if (!voice) return false;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.rate = 0.92;
+    utterance.voice = voice;
+    utterance.lang = voice.lang || "en-US";
+    utterance.rate = 0.94;
+    utterance.pitch = 1;
     window.speechSynthesis.speak(utterance);
     return true;
   }
@@ -153,14 +158,17 @@ export function FloatingStudyWindow({
     try {
       if (action === "save") {
         try {
+          const savedAt = Date.now();
           await putRecord("vocabulary", {
-            id: `${activityId}-${Date.now()}`,
+            id: `${activityId}:${normalized.toLowerCase()}`,
             selection: normalized,
             sourceActivityId: activityId,
+            sourceTitle: title,
             context: english.slice(0, 320),
-            createdAt: Date.now(),
+            createdAt: savedAt,
+            savedAt,
           });
-          setMessage(`Saved “${normalized}” to your vocabulary shelf.`);
+          setMessage(`Saved “${normalized}” to Vocabulary Shelf in Archive.`);
         } catch {
           setMessage("Saving is unavailable in this browser.");
         }
