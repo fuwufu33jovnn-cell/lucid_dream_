@@ -32,5 +32,5 @@ test("Archive reads saved floating-window vocabulary and renders a visible vocab
 test("floating Save writes a reusable vocabulary record with stable source metadata", async () => {
   const source = await readFile(new URL("../app/components/floating-study-window.tsx", import.meta.url), "utf8");
   assert.ok(source.includes('id: `${activityId}:'));
-  assert.match(source, /savedAt:/);
+  assert.ok(source.includes("savedAt,"));
 });
