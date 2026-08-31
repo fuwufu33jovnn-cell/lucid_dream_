@@ -7,9 +7,18 @@ import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../l
 import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
 
 type SubtitleMode = "english" | "chinese" | "bilingual";
+type StudyAction = "define" | "pronounce" | "explain" | "translate" | "save";
+
 const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const pomeranianIdleSrc = `${publicBasePath}/brand/pomeranian-idle.png`;
 const pomeranianWinkSrc = `${publicBasePath}/brand/pomeranian-wink.png`;
+const actionLabels: Record<StudyAction, string> = {
+  define: "Define",
+  pronounce: "Hear",
+  explain: "Explain",
+  translate: "Translate",
+  save: "Save",
+};
 
 export function FloatingStudyWindow({
   activityId,
@@ -32,7 +41,9 @@ export function FloatingStudyWindow({
   const [chinese, setChinese] = useState("");
   const [selection, setSelection] = useState("");
   const [entry, setEntry] = useState<DictionaryEntry | null>(null);
-  const [message, setMessage] = useState("Paste a short study transcript, then select or type a word.");
+  const [message, setMessage] = useState("Add context, then select a word or phrase to begin.");
+  const [busyAction, setBusyAction] = useState<StudyAction | null>(null);
+  const [lastAction, setLastAction] = useState<StudyAction | null>(null);
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const launcherTimer = useRef<number | null>(null);
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
@@ -45,7 +56,9 @@ export function FloatingStudyWindow({
       const saved = JSON.parse(window.localStorage.getItem(LAUNCHER_STORAGE_KEY) ?? "null");
       if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) setLauncherPosition(clampLauncherPosition(saved, viewport));
       else setLauncherPosition({ x: viewport.width - 54, y: Math.max(90, viewport.height * .34) });
-    } catch { setLauncherPosition({ x: viewport.width - 54, y: Math.max(90, viewport.height * .34) }); }
+    } catch {
+      setLauncherPosition({ x: viewport.width - 54, y: Math.max(90, viewport.height * .34) });
+    }
     const keepOnScreen = () => setLauncherPosition((value) => clampLauncherPosition(value, { width: window.innerWidth, height: window.innerHeight }));
     window.addEventListener("resize", keepOnScreen);
     return () => window.removeEventListener("resize", keepOnScreen);
@@ -82,7 +95,10 @@ export function FloatingStudyWindow({
     const state = launcherDrag.current;
     if (!state || state.pointerId !== event.pointerId) return;
     launcherDrag.current = null;
-    if (!state.moved) { toggleStudyWindow(); return; }
+    if (!state.moved) {
+      toggleStudyWindow();
+      return;
+    }
     setLauncherPosition((value) => {
       const snapped = snapLauncherPosition(value, { width: window.innerWidth, height: window.innerHeight });
       window.localStorage.setItem(LAUNCHER_STORAGE_KEY, JSON.stringify(snapped));
@@ -97,69 +113,188 @@ export function FloatingStudyWindow({
 
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (!drag.current) return;
-    const nextX = drag.current.originX + event.clientX - drag.current.startX;
-    const nextY = drag.current.originY + event.clientY - drag.current.startY;
-    setPosition({ x: nextX, y: nextY });
+    setPosition({
+      x: drag.current.originX + event.clientX - drag.current.startX,
+      y: drag.current.originY + event.clientY - drag.current.startY,
+    });
   }
 
-  async function act(action: "define" | "pronounce" | "explain" | "translate" | "save") {
+  function captureTextareaSelection(event: React.SyntheticEvent<HTMLTextAreaElement>) {
+    const target = event.currentTarget;
+    const chosen = normalizeSelection(target.value.slice(target.selectionStart, target.selectionEnd));
+    if (!chosen) return;
+    setSelection(chosen);
+    setEntry(null);
+    setMessage(`Selected “${chosen}”. Choose an action below.`);
+  }
+
+  async function act(action: StudyAction) {
     const normalized = normalizeSelection(selection);
-    if (!normalized) { setMessage("Type or paste a word or short phrase first."); return; }
-    if (action === "save") {
-      try {
-        await putRecord("vocabulary", { id: `${activityId}-${Date.now()}`, selection: normalized, sourceActivityId: activityId, context: english.slice(0, 320), createdAt: Date.now() });
-        setMessage("Saved to your device vocabulary shelf.");
-      } catch { setMessage("Device saving is unavailable in this browser."); }
+    if (!normalized) {
+      setMessage("Select text above or type a word / phrase first.");
       return;
     }
-    if (action === "define" || action === "pronounce") {
-      if (/\s/.test(normalized)) { setMessage("Dictionary lookup works with one word; AI Explain handles phrases when connected."); return; }
-      try {
-        const result = await lookupDictionary(normalized);
-        setEntry(result);
-        if (!result) { setMessage("No dictionary entry found."); return; }
-        setMessage(result.meanings[0]?.definition ?? "Dictionary result ready.");
-        if (action === "pronounce") {
-          if (result.audioUrl) void new Audio(result.audioUrl).play();
-          else setMessage("This dictionary entry has no audio recording.");
+
+    setBusyAction(action);
+    setLastAction(action);
+    setEntry(null);
+    setMessage(`${actionLabels[action]}…`);
+
+    try {
+      if (action === "save") {
+        try {
+          await putRecord("vocabulary", {
+            id: `${activityId}-${Date.now()}`,
+            selection: normalized,
+            sourceActivityId: activityId,
+            context: english.slice(0, 320),
+            createdAt: Date.now(),
+          });
+          setMessage(`Saved “${normalized}” to your vocabulary shelf.`);
+        } catch {
+          setMessage("Saving is unavailable in this browser.");
         }
-      } catch { setMessage("Dictionary unavailable. Save still works."); }
-      return;
+        return;
+      }
+
+      if (action === "define" || action === "pronounce") {
+        if (/\s/.test(normalized)) {
+          setMessage("Define and Hear work best with one word. Use Explain for a phrase.");
+          return;
+        }
+        try {
+          const result = await lookupDictionary(normalized);
+          setEntry(result);
+          if (!result) {
+            setMessage("No dictionary entry found. Try Explain instead.");
+            return;
+          }
+          setMessage(result.meanings[0]?.definition ?? "Dictionary result ready.");
+          if (action === "pronounce") {
+            if (result.audioUrl) {
+              await new Audio(result.audioUrl).play();
+              setMessage(`Playing pronunciation for “${normalized}”.`);
+            } else {
+              setMessage("This dictionary entry has no audio recording.");
+            }
+          }
+        } catch {
+          setMessage("Dictionary is temporarily unavailable. You can still use Save.");
+        }
+        return;
+      }
+
+      const result = await requestAi<{ text: string }>({ capability: action, selection: normalized, context: english.slice(0, 320) });
+      if (!result.ok) {
+        setMessage(result.message);
+        return;
+      }
+      setMessage(result.data.text);
+      if (action === "translate" && !chinese) setChinese(result.data.text);
+    } finally {
+      setBusyAction(null);
     }
-    const result = await requestAi<{ text: string }>({ capability: action, selection: normalized, context: english.slice(0, 320) });
-    if (!result.ok) { setMessage(result.message); return; }
-    setMessage(result.data.text);
-    if (action === "translate" && !chinese) setChinese(result.data.text);
   }
 
   return (
     <div className="floating-study-root" style={{ "--launcher-x": `${launcherPosition.x}px`, "--launcher-y": `${launcherPosition.y}px` } as React.CSSProperties}>
-      <button className={`floating-study-launcher${launcherAnimating ? " is-animating" : ""}`} type="button" onPointerDown={startLauncherDrag} onPointerMove={moveLauncher} onPointerUp={finishLauncherDrag} onPointerCancel={() => { launcherDrag.current = null; }} aria-expanded={open}>
-        {!launcherImageFailed ? <img src={launcherAnimating ? pomeranianWinkSrc : pomeranianIdleSrc} alt="" aria-hidden="true" draggable={false} onError={() => setLauncherImageFailed(true)} /> : <span className="pomeranian-fallback" aria-hidden="true">🐶</span>}
+      <button
+        className={`floating-study-launcher${launcherAnimating ? " is-animating" : ""}`}
+        type="button"
+        onPointerDown={startLauncherDrag}
+        onPointerMove={moveLauncher}
+        onPointerUp={finishLauncherDrag}
+        onPointerCancel={() => { launcherDrag.current = null; }}
+        aria-expanded={open}
+      >
+        {!launcherImageFailed
+          ? <img src={launcherAnimating ? pomeranianWinkSrc : pomeranianIdleSrc} alt="" aria-hidden="true" draggable={false} onError={() => setLauncherImageFailed(true)} />
+          : <span className="pomeranian-fallback" aria-hidden="true">🐶</span>}
         <span className="sr-only">{open ? "Close floating study tools" : "Open floating study tools"}</span>
       </button>
-        <aside className={`floating-study-window${open ? " is-open" : ""}`} style={{ "--window-x": `${position.x}px`, "--window-y": `${position.y}px`, transformOrigin: launcherPosition.x < 400 ? "left bottom" : "right bottom" } as React.CSSProperties} aria-hidden={!open} inert={!open ? true : undefined} aria-label={`Floating study tools for ${title}`}>
-          <div className="floating-study-handle" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => { drag.current = null; }}>
-            <div><span>FLOATING STUDY WINDOW</span><strong>{title}</strong></div>
-            <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)} aria-label="Close study window">×</button>
-          </div>
-          <div className="subtitle-mode-switch" aria-label="Subtitle display mode">
-            <button className={mode === "english" ? "is-active" : ""} type="button" onClick={() => setMode("english")}>ENGLISH</button>
-            <button className={mode === "chinese" ? "is-active" : ""} type="button" onClick={() => setMode("chinese")}>中文</button>
-            <button className={mode === "bilingual" ? "is-active" : ""} type="button" onClick={() => setMode("bilingual")}>BILINGUAL</button>
-          </div>
+
+      <aside
+        className={`floating-study-window${open ? " is-open" : ""}`}
+        style={{ "--window-x": `${position.x}px`, "--window-y": `${position.y}px`, transformOrigin: launcherPosition.x < 400 ? "left bottom" : "right bottom" } as React.CSSProperties}
+        aria-hidden={!open}
+        inert={!open ? true : undefined}
+        aria-label={`Floating study tools for ${title}`}
+        aria-busy={!!busyAction}
+      >
+        <div className="floating-study-handle" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => { drag.current = null; }}>
+          <div><span>FLOATING STUDY WINDOW</span><strong>{title}</strong></div>
+          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setOpen(false)} aria-label="Close study window">×</button>
+        </div>
+
+        <div className="subtitle-mode-switch" aria-label="Subtitle display mode">
+          <button className={mode === "english" ? "is-active" : ""} type="button" onClick={() => setMode("english")}>ENGLISH</button>
+          <button className={mode === "chinese" ? "is-active" : ""} type="button" onClick={() => setMode("chinese")}>中文</button>
+          <button className={mode === "bilingual" ? "is-active" : ""} type="button" onClick={() => setMode("bilingual")}>BILINGUAL</button>
+        </div>
+
+        <section className="floating-step">
+          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT</strong><span>Paste notes or a short transcript</span></div>
           <div className="subtitle-study-copy" data-language-tools-root>
-            {(mode === "english" || mode === "bilingual") && <textarea aria-label="English study transcript" value={english} onChange={(event) => setEnglish(event.target.value)} placeholder="Paste a short English study transcript or your own notes…" />}
-            {(mode === "chinese" || mode === "bilingual") && <textarea aria-label="Chinese study translation" value={chinese} onChange={(event) => setChinese(event.target.value)} placeholder="中文翻译；接通 AI 后可自动生成，也可以先自己填写。" />}
+            {(mode === "english" || mode === "bilingual") && (
+              <textarea
+                aria-label="English study transcript"
+                value={english}
+                onChange={(event) => setEnglish(event.target.value)}
+                onSelect={captureTextareaSelection}
+                placeholder="Paste English text here…"
+              />
+            )}
+            {(mode === "chinese" || mode === "bilingual") && (
+              <textarea
+                aria-label="Chinese study translation"
+                value={chinese}
+                onChange={(event) => setChinese(event.target.value)}
+                onSelect={captureTextareaSelection}
+                placeholder="中文翻译或笔记…"
+              />
+            )}
           </div>
-          <label className="floating-word-input"><span>WORD / PHRASE</span><input value={selection} onChange={(event) => { setSelection(event.target.value); setEntry(null); }} placeholder="quietly specific" /></label>
+        </section>
+
+        <section className="floating-step">
+          <div className="floating-step-heading"><strong>STEP 2 · TARGET</strong><span>Highlight text above or type it</span></div>
+          <label className="floating-word-input">
+            <span>Select text above or type a word / phrase</span>
+            <input
+              value={selection}
+              onChange={(event) => { setSelection(event.target.value); setEntry(null); }}
+              placeholder="e.g. quietly specific"
+              autoComplete="off"
+            />
+          </label>
+        </section>
+
+        <section className="floating-step">
+          <div className="floating-step-heading"><strong>STEP 3 · ACTION</strong><span>One tap → result below</span></div>
           <div className="floating-tool-actions">
-            {(["define", "pronounce", "explain", "translate", "save"] as const).map((action) => <button type="button" key={action} onClick={() => void act(action)}>{action.toUpperCase()}</button>)}
+            {(["define", "pronounce", "explain", "translate", "save"] as const).map((action) => (
+              <button
+                type="button"
+                key={action}
+                disabled={!!busyAction}
+                data-primary={action === "explain" ? "true" : "false"}
+                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Play dictionary audio" : action === "explain" ? "Explain in context with AI" : action === "translate" ? "Translate with AI" : "Save on this device"}
+                onClick={() => void act(action)}
+              >
+                {busyAction === action ? "…" : actionLabels[action]}
+              </button>
+            ))}
           </div>
+        </section>
+
+        <div className="floating-result-panel" data-state={busyAction ? "working" : "ready"}>
+          <div className="floating-result-label"><span>{busyAction ? "WORKING" : "RESULT"}</span><span>{lastAction ? actionLabels[lastAction] : "Ready"}</span></div>
           <p className="floating-tool-message" aria-live="polite">{message}</p>
           {entry && <p className="floating-dictionary-result"><strong>{entry.word} {entry.phonetic}</strong><br />{entry.meanings[0]?.definition}</p>}
-          <small className="subtitle-honesty">YouTube captions are not copied automatically. This window stores only study text you add on this device.</small>
-        </aside>
+        </div>
+
+        <small className="subtitle-honesty">Tip: highlight a word directly inside the text box and it will jump into Step 2. YouTube captions are not copied automatically.</small>
+      </aside>
     </div>
   );
 }
