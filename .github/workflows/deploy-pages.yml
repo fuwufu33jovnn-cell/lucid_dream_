@@ -36,6 +36,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare static-only Pages build
+        run: |
+          # GitHub Pages cannot host Next.js server route handlers.
+          # Remove them only from this ephemeral CI checkout; the repository
+          # and the primary deployment keep the API routes unchanged.
+          rm -rf app/api
+
       - name: Build static export
         run: npx --no-install next build
         env:
