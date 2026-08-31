@@ -1,4 +1,4 @@
-# Public mirror for networks where chatgpt.site is unavailable.
+# Public fallback mirror for LUCID DREAM.
 name: Deploy LUCID DREAM to GitHub Pages
 
 on:
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Configure GitHub Pages
@@ -36,10 +36,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build static site
-        run: npx next build
+      - name: Build static export
+        run: npx --no-install next build
         env:
+          GITHUB_ACTIONS: "true"
           NEXT_PUBLIC_BASE_PATH: /lucid_dream_
+
+      - name: Verify static export
+        run: |
+          test -f out/index.html
+          touch out/.nojekyll
+          echo "Static export ready:"
+          find out -maxdepth 2 -type f | sort | head -80
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
