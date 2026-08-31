@@ -631,6 +631,11 @@ body {
 .media-learning-panel { display: grid; grid-column: 1 / -1; gap: 0; border-bottom: 1px solid var(--ink); background: var(--paper-strong); }
 .media-frame { position: relative; width: 100%; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--ink); }
 .media-frame iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; }
+.media-source-card { display: grid; min-height: 170px; align-content: center; gap: 10px; padding: clamp(24px, 4vw, 42px); border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-strong); text-decoration: none; }
+.media-source-card:hover, .media-source-card:focus-visible { background: #181b1e; outline: 3px solid var(--acid); outline-offset: -3px; }
+.media-source-card > span { color: var(--acid); font-size: 8px; font-weight: 800; letter-spacing: .14em; }
+.media-source-card > strong { font-family: Georgia, "Times New Roman", serif; font-size: clamp(25px, 4vw, 44px); font-weight: 400; letter-spacing: -.035em; }
+.media-source-card > small { max-width: 560px; color: #bcbdb6; font-size: 10px; line-height: 1.5; }
 .media-external-state { display: grid; min-height: 230px; place-content: center; padding: 28px; color: var(--paper-strong); text-align: center; }
 .media-external-state span { color: var(--acid); font-family: Georgia, "Times New Roman", serif; font-size: 52px; }
 .media-external-state p { margin: 8px 0 0; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
