@@ -22,3 +22,12 @@ test("Hear has speech synthesis fallback when dictionary audio is unavailable", 
   assert.match(source, /speechSynthesis/);
   assert.match(source, /SpeechSynthesisUtterance/);
 });
+
+test("dictionary route has a fast secondary lexical source and UI fallbacks", async () => {
+  const route = await readFile(new URL("../app/api/dictionary/route.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../app/components/floating-study-window.tsx", import.meta.url), "utf8");
+  assert.match(route, /api\.datamuse\.com\/words/);
+  assert.match(route, /md=drp/);
+  assert.match(source, /Dictionary fallback requested/);
+  assert.match(source, /action === "pronounce"[\s\S]*speakWithBrowserVoice\(normalized\)/);
+});

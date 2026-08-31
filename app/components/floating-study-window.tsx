@@ -176,6 +176,10 @@ export function FloatingStudyWindow({
           const result = await lookupDictionary(normalized);
           setEntry(result);
           if (!result) {
+            if (action === "pronounce" && speakWithBrowserVoice(normalized)) {
+              setMessage(`Playing browser pronunciation for “${normalized}”.`);
+              return;
+            }
             setMessage("No dictionary entry found. Try Explain instead.");
             return;
           }
@@ -199,7 +203,22 @@ export function FloatingStudyWindow({
             }
           }
         } catch {
-          setMessage("Dictionary is temporarily unavailable. You can still use Save.");
+          if (action === "pronounce" && speakWithBrowserVoice(normalized)) {
+            setMessage(`Playing browser pronunciation for “${normalized}”.`);
+            return;
+          }
+          if (action === "define") {
+            const fallback = await requestAi<{ text: string }>({
+              capability: "explain",
+              selection: normalized,
+              context: `Dictionary fallback requested. Give one concise learner-friendly definition for this single English word. Original study context: ${english.slice(0, 220)}`,
+            });
+            if (fallback.ok) {
+              setMessage(fallback.data.text);
+              return;
+            }
+          }
+          setMessage("Definition services are temporarily unavailable. You can still use Save.");
         }
         return;
       }
