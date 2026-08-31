@@ -5,6 +5,15 @@ import { summarizeActivityProgress } from "../lib/editorial";
 import { getAllRecords } from "../lib/indexed-db";
 import type { ActivityProgress, StoredRecord } from "../lib/models";
 
+type VocabularyRecord = StoredRecord & {
+  selection: string;
+  sourceActivityId: string;
+  sourceTitle?: string;
+  context?: string;
+  createdAt?: number;
+  savedAt?: number;
+};
+
 type ArchiveSummary = {
   started: number;
   completed: number;
@@ -18,6 +27,7 @@ const EMPTY: ArchiveSummary = { started: 0, completed: 0, phrases: 0, saved: 0, 
 
 export function ArchiveBoard() {
   const [summary, setSummary] = useState<ArchiveSummary>(EMPTY);
+  const [vocabulary, setVocabulary] = useState<VocabularyRecord[]>([]);
   const [state, setState] = useState("Reading this device…");
 
   useEffect(() => {
@@ -27,7 +37,8 @@ export function ArchiveBoard() {
       getAllRecords<StoredRecord>("library"),
       getAllRecords<StoredRecord>("today"),
       getAllRecords<StoredRecord>("portfolio"),
-    ]).then(([activities, saved, today, portfolio]) => {
+      getAllRecords<VocabularyRecord>("vocabulary"),
+    ]).then(([activities, saved, today, portfolio, vocabularyRecords]) => {
       if (!active) return;
       const activitySummary = summarizeActivityProgress(activities);
       const todayChecks = today.reduce((total, record) => total + (Array.isArray(record.completed) ? record.completed.length : 0), 0);
@@ -35,7 +46,9 @@ export function ArchiveBoard() {
         if (!record.draft || typeof record.draft !== "object") return total;
         return total + Object.values(record.draft).filter((value) => typeof value === "string" && value.trim()).length;
       }, 0);
-      setSummary({ ...activitySummary, saved: saved.length, todayChecks, portfolioEvidence });
+      const sortedVocabulary = [...vocabularyRecords].sort((a, b) => Number(b.savedAt ?? b.createdAt ?? 0) - Number(a.savedAt ?? a.createdAt ?? 0));
+      setVocabulary(sortedVocabulary);
+      setSummary({ ...activitySummary, phrases: activitySummary.phrases + sortedVocabulary.length, saved: saved.length, todayChecks, portfolioEvidence });
       setState("Up to date on this device");
     }).catch(() => { if (active) setState("Device archive unavailable"); });
     return () => { active = false; };
@@ -52,6 +65,30 @@ export function ArchiveBoard() {
         <article className="archive-total archive-acid"><span>03 / SAVED SOURCES</span><strong>{summary.saved}</strong><p>publisher-hosted things to revisit</p></article>
         <article className="archive-total"><span>04 / TODAY CHECKS</span><strong>{summary.todayChecks}</strong><p>small tasks completed on this device</p></article>
       </div>
+
+      <section className="vocabulary-shelf" aria-label="Saved vocabulary">
+        <div className="vocabulary-shelf-heading">
+          <div><span>05 / VOCABULARY SHELF</span><h2>WORDS & PHRASES KEPT</h2></div>
+          <strong>{vocabulary.length}</strong>
+        </div>
+        {vocabulary.length ? (
+          <div className="vocabulary-shelf-list">
+            {vocabulary.map((item, index) => (
+              <article className="vocabulary-shelf-item" key={item.id}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <strong>{item.selection}</strong>
+                  <small>{item.sourceTitle ?? item.sourceActivityId}</small>
+                  {item.context ? <p>{item.context}</p> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="vocabulary-shelf-empty">Nothing saved yet. Use SAVE in the floating study window and it will appear here.</p>
+        )}
+      </section>
+
       <div className="archive-lower">
         <article><p>PORTFOLIO EVIDENCE</p><strong>{summary.portfolioEvidence}<small> / 9 fields</small></strong><span>{summary.portfolioEvidence ? "Your case study has real material to rehearse." : "Write one concrete project fact in Portfolio to start this shelf."}</span></article>
         <article><p>NEXT USEFUL MOVE</p><h2>{hasEvidence ? "Revisit one thing. Make one sentence better." : "Start anywhere that feels interesting enough."}</h2><a href="/language-lab">OPEN LANGUAGE LAB ↗</a></article>
