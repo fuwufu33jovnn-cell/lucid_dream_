@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
 import { expiredPersonalMediaIds, parsePersonalMediaUrl, recentPersonalMedia, type PersonalMediaRecord } from "../lib/personal-media";
-import { FloatingStudyWindow } from "./floating-study-window";
 
 export function PersonalMediaShelf() {
   const [url, setUrl] = useState("");
@@ -87,7 +86,6 @@ export function PersonalMediaShelf() {
           )}
         </div>
       </div>
-      <FloatingStudyWindow activityId={selected?.id ?? "personal-media"} title={selected?.title ?? "YOUR MEDIA"} />
       <p className="personal-media-status" role="status">{status}</p>
     </section>
   );
