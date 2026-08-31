@@ -128,6 +128,16 @@ export function FloatingStudyWindow({
     setMessage(`Selected “${chosen}”. Choose an action below.`);
   }
 
+  function speakWithBrowserVoice(text: string): boolean {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return false;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.rate = 0.92;
+    window.speechSynthesis.speak(utterance);
+    return true;
+  }
+
   async function act(action: StudyAction) {
     const normalized = normalizeSelection(selection);
     if (!normalized) {
@@ -172,10 +182,20 @@ export function FloatingStudyWindow({
           setMessage(result.meanings[0]?.definition ?? "Dictionary result ready.");
           if (action === "pronounce") {
             if (result.audioUrl) {
-              await new Audio(result.audioUrl).play();
-              setMessage(`Playing pronunciation for “${normalized}”.`);
+              try {
+                await new Audio(result.audioUrl).play();
+                setMessage(`Playing pronunciation for “${normalized}”.`);
+              } catch {
+                if (speakWithBrowserVoice(normalized)) {
+                  setMessage(`Playing browser pronunciation for “${normalized}”.`);
+                } else {
+                  setMessage("Pronunciation audio is unavailable in this browser.");
+                }
+              }
+            } else if (speakWithBrowserVoice(normalized)) {
+              setMessage(`Playing browser pronunciation for “${normalized}”.`);
             } else {
-              setMessage("This dictionary entry has no audio recording.");
+              setMessage("Pronunciation audio is unavailable in this browser.");
             }
           }
         } catch {
