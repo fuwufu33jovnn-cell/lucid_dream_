@@ -41,9 +41,24 @@ export async function lookupDictionary(selection: string): Promise<DictionaryEnt
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`, { signal: controller.signal });
-    if (!response.ok) return null;
-    return normalizeDictionaryResponse(await response.json());
+    const response = await fetch(`/api/dictionary?word=${encodeURIComponent(word)}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Dictionary request failed (${response.status})`);
+    const data = await response.json() as Partial<DictionaryEntry>;
+    if (typeof data.word !== "string" || !Array.isArray(data.meanings)) return null;
+    return {
+      word: data.word,
+      phonetic: typeof data.phonetic === "string" ? data.phonetic : "",
+      audioUrl: typeof data.audioUrl === "string" ? data.audioUrl : "",
+      meanings: data.meanings.filter((meaning): meaning is DictionaryMeaning =>
+        typeof meaning === "object" && meaning !== null &&
+        typeof meaning.partOfSpeech === "string" &&
+        typeof meaning.definition === "string"
+      ).slice(0, 3),
+    };
   } finally {
     window.clearTimeout(timeout);
   }
