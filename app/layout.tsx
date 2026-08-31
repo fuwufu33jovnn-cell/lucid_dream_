@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./floating-study-window-overrides.css";
 
 const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
