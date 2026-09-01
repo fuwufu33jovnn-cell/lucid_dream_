@@ -54,6 +54,40 @@ async function lookupDatamuse(word: string): Promise<DictionaryEntry | null> {
   return normalizeDatamuseResponse(await response.json(), word);
 }
 
+function editDistance(a: string, b: string): number {
+  const left = a.toLocaleLowerCase("en-US");
+  const right = b.toLocaleLowerCase("en-US");
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= right.length; j += 1) {
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length];
+}
+
+async function suggestDatamuseWord(word: string): Promise<string | null> {
+  const response = await fetchWithTimeout(`${DATAMUSE}?sl=${encodeURIComponent(word)}&max=8`, 2_500);
+  if (!response.ok) return null;
+  const payload = await response.json();
+  if (!Array.isArray(payload)) return null;
+  const candidates = payload
+    .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null && typeof value.word === "string")
+    .map((value) => String(value.word).trim())
+    .filter((value) => /^[A-Za-z][A-Za-z'-]{2,}$/u.test(value));
+
+  if (candidates.some((candidate) => candidate.toLocaleLowerCase("en-US") === word.toLocaleLowerCase("en-US"))) return null;
+
+  const maxDistance = word.length <= 5 ? 1 : 2;
+  return candidates.find((candidate) => editDistance(word, candidate) <= maxDistance) ?? null;
+}
+
 async function lookupFreeDictionary(word: string): Promise<DictionaryEntry | null> {
   const response = await fetchWithTimeout(`${FREE_DICTIONARY}/${encodeURIComponent(word)}`, 3_500);
   if (response.status === 404) return null;
@@ -62,7 +96,23 @@ async function lookupFreeDictionary(word: string): Promise<DictionaryEntry | nul
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const word = normalizeSelection(new URL(request.url).searchParams.get("word") ?? "");
+  const searchParams = new URL(request.url).searchParams;
+  const suggestionInput = normalizeSelection(searchParams.get("suggest") ?? "");
+  if (suggestionInput) {
+    if (!/^[A-Za-z][A-Za-z'-]{2,}$/u.test(suggestionInput)) {
+      return Response.json({ error: "single-english-word-required" }, { status: 400 });
+    }
+    try {
+      const suggestion = await suggestDatamuseWord(suggestionInput);
+      return suggestion
+        ? Response.json({ suggestion }, { headers: { "cache-control": "public, max-age=300, s-maxage=86400" } })
+        : Response.json({ error: "not-found" }, { status: 404 });
+    } catch {
+      return Response.json({ error: "upstream-failed" }, { status: 502 });
+    }
+  }
+
+  const word = normalizeSelection(searchParams.get("word") ?? "");
   if (!word || /\s/.test(word)) {
     return Response.json({ error: "single-word-required" }, { status: 400 });
   }
