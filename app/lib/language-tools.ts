@@ -1,5 +1,6 @@
 export type DictionaryMeaning = { partOfSpeech: string; definition: string; example?: string };
 export type DictionaryEntry = { word: string; phonetic: string; audioUrl: string; meanings: DictionaryMeaning[] };
+export type DictionarySuggestion = { suggestion: string };
 
 export function normalizeSelection(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 280);
@@ -65,5 +66,32 @@ export async function lookupDictionary(selection: string): Promise<DictionaryEnt
     };
   } finally {
     window.clearTimeout(timeout);
+  }
+}
+
+
+export async function suggestDictionaryWord(selection: string, signal?: AbortSignal): Promise<string | null> {
+  const word = normalizeSelection(selection);
+  if (!/^[A-Za-z][A-Za-z'-]{2,}$/u.test(word)) return null;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 3_500);
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  try {
+    const response = await fetch(`/api/dictionary?suggest=${encodeURIComponent(word)}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+    const data = await response.json() as Partial<DictionarySuggestion>;
+    return typeof data.suggestion === "string" && data.suggestion.trim()
+      ? data.suggestion.trim()
+      : null;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
 }
