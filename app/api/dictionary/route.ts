@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DATAMUSE = "https://api.datamuse.com/words";
+const DATAMUSE_SUG = "https://api.datamuse.com/sug";
 const FREE_DICTIONARY = "https://api.dictionaryapi.dev/api/v2/entries/en";
 
 function normalizeDatamuseResponse(input: unknown, requestedWord: string): DictionaryEntry | null {
@@ -72,17 +73,29 @@ function editDistance(a: string, b: string): number {
   return previous[right.length];
 }
 
-async function suggestDatamuseWord(word: string): Promise<string | null> {
-  const response = await fetchWithTimeout(`${DATAMUSE}?sl=${encodeURIComponent(word)}&max=8`, 2_500);
-  if (!response.ok) return null;
+async function suggestionCandidates(url: string): Promise<string[]> {
+  const response = await fetchWithTimeout(url, 2_500);
+  if (!response.ok) return [];
   const payload = await response.json();
-  if (!Array.isArray(payload)) return null;
-  const candidates = payload
+  if (!Array.isArray(payload)) return [];
+  return payload
     .filter((value): value is Record<string, unknown> => typeof value === "object" && value !== null && typeof value.word === "string")
     .map((value) => String(value.word).trim())
     .filter((value) => /^[A-Za-z][A-Za-z'-]{2,}$/u.test(value));
+}
 
-  if (candidates.some((candidate) => candidate.toLocaleLowerCase("en-US") === word.toLocaleLowerCase("en-US"))) return null;
+async function suggestDatamuseWord(word: string): Promise<string | null> {
+  const [typedSuggestions, soundAlikes] = await Promise.all([
+    suggestionCandidates(`${DATAMUSE_SUG}?s=${encodeURIComponent(word)}&max=10`),
+    suggestionCandidates(`${DATAMUSE}?sl=${encodeURIComponent(word)}&max=10`),
+  ]);
+
+  const normalized = word.toLocaleLowerCase("en-US");
+  const candidates = [...typedSuggestions, ...soundAlikes]
+    .filter((candidate, index, all) =>
+      candidate.toLocaleLowerCase("en-US") !== normalized &&
+      all.findIndex((item) => item.toLocaleLowerCase("en-US") === candidate.toLocaleLowerCase("en-US")) === index
+    );
 
   const maxDistance = word.length <= 5 ? 1 : 2;
   return candidates.find((candidate) => editDistance(word, candidate) <= maxDistance) ?? null;
