@@ -66,6 +66,42 @@ test("AI gateway falls back from Gemini to OpenAI and returns validated JSON", a
   assert.deepEqual(openAiBody.reasoning, { effort: "none" });
 });
 
+test("AI gateway retries Gemini once when a vocabulary card fails validation", async () => {
+  let calls = 0;
+  const validCard = {
+    selection: "foodie",
+    validSelection: true,
+    suggestedCorrection: null,
+    chineseMeaning: "美食爱好者；吃货",
+    englishDefinition: "a person who is very interested in food",
+    pronunciation: "/ˈfuːdi/",
+    example: "As a foodie, she keeps a list of neighborhood restaurants.",
+  };
+  const handler = createAiHandler({
+    env: { GEMINI_API_KEY: "gemini-test" },
+    fetch: async () => {
+      calls += 1;
+      const card = calls === 1 ? { ...validCard, example: "This sentence misses the selected term." } : validCard;
+      return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify(card) }] } }] });
+    },
+  });
+
+  const response = await handler(new Request("https://lucid.example/api/ai", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      capability: "vocabulary-card",
+      selection: "foodie",
+      context: "She is a foodie who loves trying regional dishes.",
+      sourceLanguage: "en",
+    }),
+  }));
+
+  assert.equal(response.status, 200);
+  assert.equal(calls, 2);
+  assert.deepEqual(await response.json(), validCard);
+});
+
 test("AI gateway skips malformed provider output and tries DeepSeek", async () => {
   const urls = [];
   let deepSeekBody;
