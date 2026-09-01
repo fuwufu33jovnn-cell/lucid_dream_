@@ -36,5 +36,7 @@ jobs:
           find tests -maxdepth 1 -name '*.test.mjs' ! -name 'rendered-html.test.mjs' -print0 \
             | xargs -0 node --test
 
-      - name: Verify Next.js production build and type-check
+      - name: Verify Vercel-mode Next.js production build and type-check
         run: npx --no-install next build
+        env:
+          GITHUB_ACTIONS: "false"
