@@ -20,7 +20,7 @@ const actionLabels: Record<StudyAction, string> = {
   define: "Define",
   pronounce: "Hear",
   explain: "Explain",
-  refine: "Refine",
+  refine: "Usage",
   translate: "Translate",
   save: "Save",
 };
@@ -97,8 +97,11 @@ export function FloatingStudyWindow({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      translationAbort.current?.abort();
+      translationSequence.current += 1;
       setSourceText(initialText);
       setTranslatedText("");
+      setTranslationState("idle");
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activityId, initialText]);
@@ -323,10 +326,13 @@ export function FloatingStudyWindow({
 
   function swapLanguages() {
     const resolvedSource = sourceLanguage === "auto" ? detectedTargetLanguage(sourceText) : sourceLanguage;
+    translationAbort.current?.abort();
+    translationSequence.current += 1;
     setSourceLanguage(targetLanguage);
     setTargetLanguage(resolvedSource);
     setSourceText(translatedText);
     setTranslatedText(sourceText);
+    setTranslationState(sourceText.trim() ? "ready" : "idle");
   }
 
   async function pronounceTarget(normalized: string) {
@@ -380,18 +386,19 @@ export function FloatingStudyWindow({
             return;
           }
 
-          let dictionary: DictionaryEntry | null = null;
           const language = speechLanguage(sourceLanguage, normalized);
-          if (language === "en-US" && !/\s/u.test(normalized)) {
-            try { dictionary = await lookupDictionary(normalized); } catch { dictionary = null; }
-          }
-
-          const cardResult = await requestAi<VocabularyCard>({
+          const dictionaryPromise: Promise<DictionaryEntry | null> =
+            language === "en-US" && !/\s/u.test(normalized)
+              ? lookupDictionary(normalized).catch(() => null)
+              : Promise.resolve(null);
+          const cardPromise = requestAi<VocabularyCard>({
             capability: "vocabulary-card",
             selection: normalized,
             context: sourceText.slice(0, 1_000),
             sourceLanguage,
           });
+          setMessage(`Building a complete card for “${normalized}”…`);
+          const [dictionary, cardResult] = await Promise.all([dictionaryPromise, cardPromise]);
           const savedAt = Date.now();
           const completeRecord = completeVocabularyRecord({
             id: vocabularyRecordId(normalized),
@@ -612,10 +619,10 @@ export function FloatingStudyWindow({
                 disabled={!!busyAction}
                 data-primary={action === "explain" ? "true" : "false"}
                 data-saved={action === "save" && selectionSaved ? "true" : undefined}
-                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Make the text more natural" : action === "translate" ? "Translate the target" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
+                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Show real usage, patterns, and a natural example" : action === "translate" ? "Translate the target" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
                 onClick={() => void act(action)}
               >
-                {busyAction === action ? "…" : action === "save" && selectionSaved ? "Undo" : actionLabels[action]}
+                {busyAction === action ? (action === "save" ? "Saving…" : action === "translate" ? "Translating…" : "Working…") : action === "save" && selectionSaved ? "Undo" : actionLabels[action]}
               </button>
             ))}
           </div>
@@ -636,7 +643,7 @@ export function FloatingStudyWindow({
           {resultText && <p className="floating-action-result">{resultText}</p>}
         </div>
 
-        <small className="subtitle-honesty">Tip: highlight any word or phrase in either translation box and it jumps into Target. Double-click the dog to restore the default window size.</small>
+        <small className="subtitle-honesty">Tip: highlight a word or phrase, then press Enter to copy it into Target without deleting it from the source. Double-click the dog to restore the default window size.</small>
       </aside>
     </div>
   );

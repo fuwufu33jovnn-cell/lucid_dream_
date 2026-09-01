@@ -45,3 +45,11 @@ test("YouTube embeds send referrer identity and keep direct fallbacks", async ()
   assert.match(source, /FIND CURRENT OFFICIAL VIDEO/);
   assert.doesNotMatch(source, /rel="noreferrer"/);
 });
+
+
+test("optional personal media label clearly names the shelf item and confirms the saved title", async () => {
+  const source = await readFile(new URL("../app/components/personal-media-shelf.tsx", import.meta.url), "utf8");
+  assert.match(source, /CUSTOM SHELF NAME \/ OPTIONAL/);
+  assert.match(source, /Shown in shelf/);
+  assert.match(source, /IMPORTED AS/);
+});
