@@ -1,6 +1,6 @@
 import type { AiRequest } from "./ai-contracts";
 
-export type AiProvider = "qwen" | "mistral" | "siliconflow" | "doubao" | "kimi" | "deepseek" | "gemini" | "openai";
+export type AiProvider = "qwen" | "mistral" | "siliconflow" | "doubao" | "deepseek" | "kimi" | "gemini" | "openai";
 export type AiStatus = { configured: boolean; providers: AiProvider[] };
 export type AiResponse<T> = { ok: true; data: T } | { ok: false; code: "not-connected" | "timeout" | "invalid-response" | "request-failed"; message: string };
 export type AiRequestOptions = { timeoutMs?: number; signal?: AbortSignal };
