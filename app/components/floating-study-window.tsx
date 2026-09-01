@@ -49,6 +49,10 @@ function detectedTargetLanguage(text: string): TargetLanguage {
   return "en";
 }
 
+function alternateTargetLanguage(source: TargetLanguage): TargetLanguage {
+  return source === "en" ? "zh-CN" : "en";
+}
+
 export function FloatingStudyWindow({
   activityId,
   title,
@@ -81,9 +85,12 @@ export function FloatingStudyWindow({
   const [busyAction, setBusyAction] = useState<StudyAction | null>(null);
   const [lastAction, setLastAction] = useState<StudyAction | null>(null);
   const windowRef = useRef<HTMLElement | null>(null);
+  const targetInputRef = useRef<HTMLInputElement | null>(null);
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const launcherTimer = useRef<number | null>(null);
   const translationTimer = useRef<number | null>(null);
+  const translationAbort = useRef<AbortController | null>(null);
+  const translationCache = useRef(new Map<string, string>());
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
   const translationSequence = useRef(0);
   const saveCheckSequence = useRef(0);
@@ -132,8 +139,18 @@ export function FloatingStudyWindow({
 
   useEffect(() => () => {
     if (launcherTimer.current != null) window.clearTimeout(launcherTimer.current);
+    if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
+    translationAbort.current?.abort();
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
+
+  useEffect(() => {
+    const text = sourceText.trim();
+    const effectiveSource = sourceLanguage === "auto" ? detectedTargetLanguage(text) : sourceLanguage;
+    if (!text && sourceLanguage === "auto") return;
+    if (effectiveSource !== targetLanguage) return;
+    setTargetLanguage(alternateTargetLanguage(effectiveSource));
+  }, [sourceLanguage, sourceText, targetLanguage]);
 
   const translateContext = useCallback(async (trigger: "auto" | "manual") => {
     if (trigger === "manual" && translationTimer.current != null) {
@@ -149,6 +166,17 @@ export function FloatingStudyWindow({
     }
 
     const requestId = ++translationSequence.current;
+    const requestKey = `${sourceLanguage}|${targetLanguage}|${text}`;
+    const cached = translationCache.current.get(requestKey);
+    if (cached) {
+      setTranslatedText(cached);
+      setTranslationState("ready");
+      return;
+    }
+
+    translationAbort.current?.abort();
+    const controller = new AbortController();
+    translationAbort.current = controller;
     setTranslationState("working");
     const result = await requestAi<{ text: string }>({
       capability: "translate",
@@ -156,13 +184,14 @@ export function FloatingStudyWindow({
       context: trigger === "auto" ? "Live context translation while the learner types." : "User-confirmed context translation.",
       sourceLanguage,
       targetLanguage,
-    });
-    if (requestId !== translationSequence.current) return;
+    }, { timeoutMs: 9_000, signal: controller.signal });
+    if (controller.signal.aborted || requestId !== translationSequence.current) return;
     if (!result.ok) {
       setTranslationState("error");
-      if (trigger === "manual") setMessage(result.message);
+      setMessage(trigger === "manual" ? result.message : "Translation paused. Tap Translate now to retry.");
       return;
     }
+    translationCache.current.set(requestKey, result.data.text);
     setTranslatedText(result.data.text);
     setTranslationState("ready");
   }, [sourceLanguage, sourceText, targetLanguage]);
@@ -172,7 +201,7 @@ export function FloatingStudyWindow({
     translationTimer.current = window.setTimeout(() => {
       translationTimer.current = null;
       void translateContext("auto");
-    }, 650);
+    }, 450);
     return () => {
       if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
       translationTimer.current = null;
@@ -251,14 +280,26 @@ export function FloatingStudyWindow({
     });
   }
 
-  function captureTextareaSelection(event: React.SyntheticEvent<HTMLTextAreaElement>) {
-    const target = event.currentTarget;
+  function pushTextareaSelection(target: HTMLTextAreaElement): string {
     const chosen = normalizeSelection(target.value.slice(target.selectionStart, target.selectionEnd));
-    if (!chosen) return;
+    if (!chosen) return "";
     setSelection(chosen);
     setEntry(null);
     setResultText("");
     setMessage(`Word or phrase is ready in Target: “${chosen}”. Choose an action below.`);
+    return chosen;
+  }
+
+  function captureTextareaSelection(event: React.SyntheticEvent<HTMLTextAreaElement>) {
+    pushTextareaSelection(event.currentTarget);
+  }
+
+  function captureSelectionOnEnter(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.currentTarget.selectionStart === event.currentTarget.selectionEnd) return;
+    const chosen = pushTextareaSelection(event.currentTarget);
+    if (!chosen) return;
+    event.preventDefault();
+    window.requestAnimationFrame(() => targetInputRef.current?.focus());
   }
 
   function speechLanguage(language: SourceLanguage | TargetLanguage, text: string): SpeechLanguage {
@@ -478,7 +519,13 @@ export function FloatingStudyWindow({
             <label>
               <span className="sr-only">Source language</span>
               <select value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value as SourceLanguage)}>
-                {sourceLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+                {sourceLanguages.map((language) => (
+                  <option key={language.value} value={language.value}>
+                    {language.value === "auto" && sourceText.trim()
+                      ? `AUTO · ${targetLanguages.find((item) => item.value === detectedTargetLanguage(sourceText))?.label ?? "DETECT"}`
+                      : language.label}
+                  </option>
+                ))}
               </select>
             </label>
             <button type="button" onClick={swapLanguages} aria-label="Swap translation languages" title="Swap languages">⇄</button>
@@ -497,6 +544,7 @@ export function FloatingStudyWindow({
                 value={sourceText}
                 onChange={(event) => updateSourceText(event.target.value)}
                 onSelect={captureTextareaSelection}
+                onKeyDown={captureSelectionOnEnter}
                 placeholder="Type a word, phrase, or sentence…"
               />
               <button type="button" className="floating-speak-button" onClick={() => speakText(sourceText, speechLanguage(sourceLanguage, sourceText))} aria-label="Speak source text" title="Speak source text">◖))</button>
@@ -507,6 +555,7 @@ export function FloatingStudyWindow({
                 value={translatedText}
                 readOnly
                 onSelect={captureTextareaSelection}
+                onKeyDown={captureSelectionOnEnter}
                 placeholder={translationState === "working" ? "Translating…" : "Translation appears here"}
               />
               <button type="button" className="floating-speak-button" onClick={() => speakText(translatedText, speechLanguageMap[targetLanguage])} aria-label="Speak translation" title="Speak translation">◖))</button>
@@ -544,6 +593,7 @@ export function FloatingStudyWindow({
           <label className="floating-word-input">
             <span>Select text above or type a word / phrase</span>
             <input
+              ref={targetInputRef}
               value={selection}
               onChange={(event) => { setSelection(event.target.value); setEntry(null); setResultText(""); }}
               placeholder="e.g. quietly specific"
