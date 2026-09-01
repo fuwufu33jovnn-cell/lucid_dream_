@@ -509,9 +509,9 @@ export function FloatingStudyWindow({
                 window.requestAnimationFrame(() => targetInputRef.current?.focus());
               }}
             >
-              <span>Did you mean:</span>
+              <span>你想检索的是不是：</span>
               <strong>{spellingSuggestion}</strong>
-              <small>你想检索的是不是这个词？</small>
+              <small>Did you mean?</small>
             </button>
           )}
         </section>

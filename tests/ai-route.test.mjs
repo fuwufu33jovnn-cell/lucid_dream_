@@ -107,15 +107,15 @@ test("AI gateway retries Gemini once when a vocabulary card fails validation", a
   assert.deepEqual(await response.json(), validCard);
 });
 
-test("AI gateway skips malformed provider output and tries DeepSeek", async () => {
+test("AI gateway skips malformed provider output and tries the next configured provider", async () => {
   const urls = [];
   let deepSeekBody;
   const handler = createAiHandler({
-    env: { GEMINI_API_KEY: "gemini-test", DEEPSEEK_API_KEY: "deepseek-test" },
+    env: { QWEN_API_KEY: "qwen-test", DEEPSEEK_API_KEY: "deepseek-test" },
     fetch: async (url, init) => {
       urls.push(String(url));
-      if (String(url).includes("googleapis.com")) {
-        return Response.json({ candidates: [{ content: { parts: [{ text: "not json" }] } }] });
+      if (String(url).includes("dashscope.aliyuncs.com")) {
+        return Response.json({ choices: [{ message: { content: "not json" } }] });
       }
       deepSeekBody = JSON.parse(String(init?.body ?? "{}"));
       return Response.json({ choices: [{ message: { content: JSON.stringify({ text: "A concise Chinese explanation." }) } }] });
@@ -126,6 +126,7 @@ test("AI gateway skips malformed provider output and tries DeepSeek", async () =
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { text: "A concise Chinese explanation." });
   assert.equal(urls.length, 2);
+  assert.match(urls[0], /dashscope\.aliyuncs\.com/);
   assert.match(urls[1], /api\.deepseek\.com\/chat\/completions/);
   assert.deepEqual(deepSeekBody.thinking, { type: "disabled" });
 });
