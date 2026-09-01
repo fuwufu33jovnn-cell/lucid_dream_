@@ -18,7 +18,7 @@ test("AI gateway status reports configured providers without exposing keys", () 
     DEEPSEEK_API_KEY: "deepseek-secret",
     GEMINI_API_KEY: "gemini-secret",
     OPENAI_API_KEY: "  ",
-  }), ["qwen", "mistral", "siliconflow", "doubao", "kimi", "deepseek", "gemini"]);
+  }), ["qwen", "mistral", "siliconflow", "doubao", "deepseek", "kimi", "gemini"]);
 });
 
 test("AI gateway rejects malformed capability payloads before calling a provider", async () => {
