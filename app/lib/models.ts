@@ -38,9 +38,3 @@ export type ActivityProgress = StoredRecord & {
   updatedAt: number;
 };
 
-export type VocabularyRecord = StoredRecord & {
-  selection: string;
-  sourceActivityId: string;
-  context: string;
-  createdAt: number;
-};
