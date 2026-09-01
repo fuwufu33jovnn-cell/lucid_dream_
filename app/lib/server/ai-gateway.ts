@@ -129,7 +129,7 @@ function extractOpenAiText(payload: Record<string, unknown>): string | null {
 
 function extractProviderText(provider: Provider, payload: Record<string, unknown>): string | null {
   if (provider === "openai") return extractOpenAiText(payload);
-  if (provider !== "openai" && provider !== "gemini") {
+  if (provider !== "gemini") {
     const choices = payload.choices;
     if (!Array.isArray(choices)) return null;
     const message = choices[0] && typeof choices[0] === "object" ? (choices[0] as Record<string, unknown>).message : null;
