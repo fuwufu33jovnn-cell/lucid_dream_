@@ -66,6 +66,62 @@ function normalizedVocabularyText(value: string): string {
   return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase("en-US");
 }
 
+function containsVocabularyPhrase(example: string, phrase: string): boolean {
+  const normalizedExample = normalizedVocabularyText(example);
+  const normalizedPhrase = normalizedVocabularyText(phrase);
+  if (!normalizedPhrase) return false;
+
+  const contains = (candidate: string) => {
+    const escaped = candidate.replace(/[.*+?^$(){}|[\]\\]/g, "\\$&");
+    return new RegExp("(^|[^\\p{L}\\p{N}])" + escaped + "(?=$|[^\\p{L}\\p{N}])", "iu").test(normalizedExample);
+  };
+  if (contains(normalizedPhrase)) return true;
+
+  const words = normalizedPhrase.split(" ");
+  if (!/^[a-z][a-z'-]*$/u.test(words[0] ?? "")) return false;
+
+  const irregular: Record<string, string[]> = {
+    be: ["am", "is", "are", "was", "were", "been", "being"],
+    come: ["comes", "came", "coming"],
+    do: ["does", "did", "done", "doing"],
+    feel: ["feels", "felt", "feeling"],
+    find: ["finds", "found", "finding"],
+    get: ["gets", "got", "gotten", "getting"],
+    go: ["goes", "went", "gone", "going"],
+    have: ["has", "had", "having"],
+    know: ["knows", "knew", "known", "knowing"],
+    make: ["makes", "made", "making"],
+    run: ["runs", "ran", "running"],
+    say: ["says", "said", "saying"],
+    see: ["sees", "saw", "seen", "seeing"],
+    speak: ["speaks", "spoke", "spoken", "speaking"],
+    take: ["takes", "took", "taken", "taking"],
+    think: ["thinks", "thought", "thinking"],
+    write: ["writes", "wrote", "written", "writing"],
+  };
+
+  const base = words[0];
+  const regular = new Set<string>();
+  if (base.endsWith("y") && base.length > 1 && !/[aeiou]y$/u.test(base)) {
+    regular.add(base.slice(0, -1) + "ies");
+    regular.add(base.slice(0, -1) + "ied");
+  } else {
+    regular.add(/[sxz]$|(?:ch|sh)$/u.test(base) ? base + "es" : base + "s");
+    regular.add(base.endsWith("e") ? base + "d" : base + "ed");
+  }
+  regular.add(base.endsWith("ie")
+    ? base.slice(0, -2) + "ying"
+    : base.endsWith("e") && !base.endsWith("ee")
+      ? base.slice(0, -1) + "ing"
+      : base + "ing");
+
+  const variants = new Set([...(irregular[base] ?? []), ...regular]);
+  for (const variant of variants) {
+    if (contains([variant, ...words.slice(1)].join(" "))) return true;
+  }
+  return false;
+}
+
 export function validateVocabularyCard(value: unknown, requestedSelection?: string): value is VocabularyCard {
   if (!object(value)
     || typeof value.selection !== "string"
@@ -82,8 +138,7 @@ export function validateVocabularyCard(value: unknown, requestedSelection?: stri
 
   const selection = normalizedVocabularyText(value.selection);
   if (!selection || (requestedSelection && selection !== normalizedVocabularyText(requestedSelection))) return false;
-  const escapedSelection = selection.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapedSelection}(?=$|[^\\p{L}\\p{N}])`, "iu").test(normalizedVocabularyText(value.example));
+  return containsVocabularyPhrase(value.example, selection);
 }
 
 export function validateVocabularyCardResponse(value: unknown, requestedSelection: string): value is VocabularyCard {
