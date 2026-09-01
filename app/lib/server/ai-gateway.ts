@@ -3,7 +3,7 @@ import { parseGatewayRequest } from "../../../supabase/functions/_shared/ai-cont
 
 type GatewayEnv = Record<string, string | undefined>;
 type FetchLike = typeof globalThis.fetch;
-type Provider = "gemini" | "openai" | "deepseek";
+type Provider = "gemini" | "openai" | "deepseek" | "doubao";
 
 type HandlerDependencies = {
   env: GatewayEnv;
@@ -23,6 +23,7 @@ export function getConfiguredProviders(env: GatewayEnv): Provider[] {
     ["gemini", env.GEMINI_API_KEY],
     ["openai", env.OPENAI_API_KEY],
     ["deepseek", env.DEEPSEEK_API_KEY],
+    ["doubao", env.ARK_API_KEY],
   ];
   return providers.filter(([, key]) => Boolean(key?.trim())).map(([provider]) => provider);
 }
@@ -121,7 +122,7 @@ function extractOpenAiText(payload: Record<string, unknown>): string | null {
 
 function extractProviderText(provider: Provider, payload: Record<string, unknown>): string | null {
   if (provider === "openai") return extractOpenAiText(payload);
-  if (provider === "deepseek") {
+  if (provider === "deepseek" || provider === "doubao") {
     const choices = payload.choices;
     if (!Array.isArray(choices)) return null;
     const message = choices[0] && typeof choices[0] === "object" ? (choices[0] as Record<string, unknown>).message : null;
@@ -167,9 +168,12 @@ async function callProvider(provider: Provider, key: string, request: Record<str
   } else if (provider === "openai") {
     url = "https://api.openai.com/v1/responses";
     init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.OPENAI_TEXT_MODEL ?? "gpt-5.6-luna", reasoning: { effort: "none" }, instructions, input: JSON.stringify(request), text: { format: { type: "json_schema", name: `lucid_${capability.replaceAll("-", "_")}`, strict: true, schema } } }) };
-  } else {
+  } else if (provider === "deepseek") {
     url = "https://api.deepseek.com/chat/completions";
     init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.DEEPSEEK_MODEL ?? "deepseek-v4-flash", thinking: { type: "disabled" }, messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }], response_format: { type: "json_object" }, max_tokens: 3_000 }) };
+  } else {
+    url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.DOUBAO_MODEL ?? "doubao-seed-2-1-pro-260628", messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }], max_tokens: 3_000 }) };
   }
 
   try {
@@ -233,6 +237,7 @@ export function createAiHandler({ env, fetch: fetcher }: HandlerDependencies) {
       ["gemini", env.GEMINI_API_KEY],
       ["openai", env.OPENAI_API_KEY],
       ["deepseek", env.DEEPSEEK_API_KEY],
+      ["doubao", env.ARK_API_KEY],
     ];
     if (getConfiguredProviders(env).length === 0) return json({ error: "AI is not configured yet." }, 503);
 
