@@ -29,8 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run regression tests
-        run: node --test tests/*.test.mjs
+      - name: Build and run repository tests
+        run: npm test
 
-      - name: Type-check production build
+      - name: Verify Next.js production type-check
         run: npx --no-install next build
