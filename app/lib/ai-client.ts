@@ -3,6 +3,7 @@ import type { AiRequest } from "./ai-contracts";
 export type AiProvider = "gemini" | "openai" | "deepseek";
 export type AiStatus = { configured: boolean; providers: AiProvider[] };
 export type AiResponse<T> = { ok: true; data: T } | { ok: false; code: "not-connected" | "timeout" | "invalid-response" | "request-failed"; message: string };
+export type AiRequestOptions = { timeoutMs?: number; signal?: AbortSignal };
 
 export async function getAiStatus(): Promise<AiStatus> {
   try {
@@ -18,9 +19,12 @@ export async function getAiStatus(): Promise<AiStatus> {
   }
 }
 
-export async function requestAi<T>(request: AiRequest): Promise<AiResponse<T>> {
+export async function requestAi<T>(request: AiRequest, options: AiRequestOptions = {}): Promise<AiResponse<T>> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 25_000);
+  const abortFromOutside = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  else options.signal?.addEventListener("abort", abortFromOutside, { once: true });
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 25_000);
   try {
     const response = await fetch("/api/ai", {
       method: "POST",
@@ -39,5 +43,6 @@ export async function requestAi<T>(request: AiRequest): Promise<AiResponse<T>> {
       : { ok: false, code: "request-failed", message: "AI request failed. Your work is still here." };
   } finally {
     window.clearTimeout(timeout);
+    options.signal?.removeEventListener("abort", abortFromOutside);
   }
 }

@@ -25,6 +25,22 @@ test("highlighted context text becomes the action target", async () => {
   assert.match(source, /word or phrase is ready/i);
 });
 
+test("pressing Enter on a highlighted word keeps the source sentence intact and moves focus to Target", async () => {
+  const source = await readFile(componentUrl, "utf8");
+  assert.match(source, /captureSelectionOnEnter/);
+  assert.match(source, /event\.preventDefault\(\)/);
+  assert.match(source, /targetInputRef\.current\?\.focus\(\)/);
+  assert.match(source, /onKeyDown=\{captureSelectionOnEnter\}/);
+});
+
+test("translation requests are cancellable, cached and use a shorter interactive timeout", async () => {
+  const source = await readFile(componentUrl, "utf8");
+  assert.match(source, /translationAbort/);
+  assert.match(source, /translationCache/);
+  assert.match(source, /timeoutMs:\s*9_000/);
+  assert.match(source, /}, 450\);/);
+});
+
 test("speech controls cover context sentences, action results, speed and voice style", async () => {
   const source = await readFile(componentUrl, "utf8");
   assert.match(source, /speechRate/);
