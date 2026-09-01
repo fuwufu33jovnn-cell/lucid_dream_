@@ -42,6 +42,10 @@ test("dictionary route offers a conservative Google-style spelling suggestion", 
   assert.match(route, /suggestDatamuseWord/);
   assert.match(route, /api\.datamuse\.com\/sug/);
   assert.match(route, /candidate\.toLocaleLowerCase\("en-US"\) !== normalized/);
+  assert.match(route, /lookupDatamuseExact/);
+  assert.match(route, /isRecognizedWord/);
+  assert.match(route, /candidates\.map\(\(candidate\) => isRecognizedWord\(candidate\)\)/);
+  assert.match(route, /if \(knownWord\) return Response\.json\(\{ error: "not-found" \}, \{ status: 404 \}\)/);
   assert.match(route, /editDistance/);
   assert.match(route, /maxDistance = word\.length <= 5 \? 1 : 2/);
   assert.match(client, /suggestDictionaryWord/);

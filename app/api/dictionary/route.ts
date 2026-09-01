@@ -55,6 +55,30 @@ async function lookupDatamuse(word: string): Promise<DictionaryEntry | null> {
   return normalizeDatamuseResponse(await response.json(), word);
 }
 
+async function lookupDatamuseExact(word: string): Promise<DictionaryEntry | null> {
+  const url = `${DATAMUSE}?sp=${encodeURIComponent(word)}&md=drp&ipa=1&max=5`;
+  const response = await fetchWithTimeout(url, 3_000);
+  if (!response.ok) return null;
+  const payload = await response.json();
+  if (!Array.isArray(payload)) return null;
+  const normalized = word.toLocaleLowerCase("en-US");
+  const exact = payload.find((value) =>
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).word === "string" &&
+    String((value as Record<string, unknown>).word).toLocaleLowerCase("en-US") === normalized
+  );
+  return exact ? normalizeDatamuseResponse([exact], word) : null;
+}
+
+async function isRecognizedWord(word: string): Promise<boolean> {
+  const [freeDictionary, datamuse] = await Promise.all([
+    lookupFreeDictionary(word).catch(() => null),
+    lookupDatamuseExact(word).catch(() => null),
+  ]);
+  return Boolean(freeDictionary || datamuse);
+}
+
 function editDistance(a: string, b: string): number {
   const left = a.toLocaleLowerCase("en-US");
   const right = b.toLocaleLowerCase("en-US");
@@ -91,14 +115,19 @@ async function suggestDatamuseWord(word: string): Promise<string | null> {
   ]);
 
   const normalized = word.toLocaleLowerCase("en-US");
+  const maxDistance = word.length <= 5 ? 1 : 2;
   const candidates = [...typedSuggestions, ...soundAlikes]
     .filter((candidate, index, all) =>
       candidate.toLocaleLowerCase("en-US") !== normalized &&
+      editDistance(word, candidate) <= maxDistance &&
       all.findIndex((item) => item.toLocaleLowerCase("en-US") === candidate.toLocaleLowerCase("en-US")) === index
-    );
+    )
+    .slice(0, 5);
 
-  const maxDistance = word.length <= 5 ? 1 : 2;
-  return candidates.find((candidate) => editDistance(word, candidate) <= maxDistance) ?? null;
+  if (candidates.length === 0) return null;
+  const validation = await Promise.all(candidates.map((candidate) => isRecognizedWord(candidate)));
+  const firstValidIndex = validation.findIndex(Boolean);
+  return firstValidIndex >= 0 ? candidates[firstValidIndex] : null;
 }
 
 async function lookupFreeDictionary(word: string): Promise<DictionaryEntry | null> {
@@ -116,11 +145,10 @@ export async function GET(request: Request): Promise<Response> {
       return Response.json({ error: "single-english-word-required" }, { status: 400 });
     }
     try {
-      const [knownWord, suggestion] = await Promise.all([
-        lookupFreeDictionary(suggestionInput).catch(() => null),
-        suggestDatamuseWord(suggestionInput).catch(() => null),
-      ]);
+      const knownWord = await isRecognizedWord(suggestionInput);
       if (knownWord) return Response.json({ error: "not-found" }, { status: 404 });
+
+      const suggestion = await suggestDatamuseWord(suggestionInput).catch(() => null);
       return suggestion
         ? Response.json({ suggestion }, { headers: { "cache-control": "public, max-age=300, s-maxage=86400" } })
         : Response.json({ error: "not-found" }, { status: 404 });
