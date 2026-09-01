@@ -5,65 +5,60 @@ import test from "node:test";
 const componentUrl = new URL("../app/components/floating-study-window.tsx", import.meta.url);
 const cssUrl = new URL("../app/floating-study-window-overrides.css", import.meta.url);
 
-test("context works as a multilingual live translator with Korean", async () => {
+test("context is a single source box, not a sentence translation module", async () => {
   const source = await readFile(componentUrl, "utf8");
-  assert.match(source, /sourceLanguage/);
-  assert.match(source, /targetLanguage/);
-  assert.match(source, /AUTO DETECT/);
-  assert.match(source, /한국어/);
-  assert.match(source, /translateContext/);
-  assert.match(source, /setTimeout\([^)]*translateContext|translateContext\([^)]*auto/s);
-  assert.match(source, />Translate now</);
-  assert.match(source, /translationTimer/);
-  assert.doesNotMatch(source, /disabled=\{!sourceText\.trim\(\) \|\| translationState === "working"\}/);
+  assert.match(source, /STEP 1 · CONTEXT/);
+  assert.match(source, /aria-label="Context text"/);
+  assert.match(source, /Paste a sentence, then highlight a word or phrase/);
+  assert.doesNotMatch(source, /translateContext/);
+  assert.doesNotMatch(source, /translatedText/);
+  assert.doesNotMatch(source, />Translate now</);
 });
 
-test("highlighted context text becomes the action target", async () => {
+test("highlighted context text becomes the target without deleting the source", async () => {
   const source = await readFile(componentUrl, "utf8");
   assert.match(source, /onSelect=\{captureTextareaSelection\}/);
   assert.match(source, /setSelection\(chosen\)/);
-  assert.match(source, /word or phrase is ready/i);
-});
-
-test("pressing Enter on a highlighted word keeps the source sentence intact and moves focus to Target", async () => {
-  const source = await readFile(componentUrl, "utf8");
   assert.match(source, /captureSelectionOnEnter/);
   assert.match(source, /event\.preventDefault\(\)/);
   assert.match(source, /targetInputRef\.current\?\.focus\(\)/);
-  assert.match(source, /onKeyDown=\{captureSelectionOnEnter\}/);
 });
 
-test("translation requests are cancellable, cached and use a shorter interactive timeout", async () => {
+test("vocabulary actions have clear non-overlapping meanings", async () => {
   const source = await readFile(componentUrl, "utf8");
-  assert.match(source, /translationAbort/);
-  assert.match(source, /translationCache/);
-  assert.match(source, /timeoutMs:\s*9_000/);
-  assert.match(source, /}, 450\);/);
+  assert.match(source, /relations:\s*"Syn\/Ant"/);
+  assert.match(source, /usage:\s*"Usage"/);
+  assert.match(source, /capability:\s*"define"/);
+  assert.match(source, /capability,\n\s*selection: normalized/);
+  assert.match(source, /Translate is for a word or short phrase/);
+  assert.doesNotMatch(source, /explain:\s*"Explain"/);
+  assert.doesNotMatch(source, /refine:\s*"Usage"/);
 });
 
-test("speech controls cover context sentences, action results, speed and voice style", async () => {
+test("every action can show the same selected UI state", async () => {
+  const source = await readFile(componentUrl, "utf8");
+  const css = await readFile(cssUrl, "utf8");
+  assert.match(source, /data-active=\{lastAction === action \? "true" : undefined\}/);
+  assert.match(source, /aria-pressed=\{lastAction === action\}/);
+  assert.doesNotMatch(source, /data-primary/);
+  assert.match(css, /button\[data-active="true"\]/);
+});
+
+test("define no longer duplicates the dictionary English definition", async () => {
+  const source = await readFile(componentUrl, "utf8");
+  assert.match(source, /setMessage\("Definition ready\."\)/);
+  assert.doesNotMatch(source, /entry\?\.meanings/);
+  assert.doesNotMatch(source, /floating-dictionary-result/);
+});
+
+test("speech controls cover context, target pronunciation and results", async () => {
   const source = await readFile(componentUrl, "utf8");
   assert.match(source, /speechRate/);
   assert.match(source, /voiceGender/);
+  assert.match(source, /Speak context/);
+  assert.match(source, /Speak result/);
   assert.match(source, /Female/);
   assert.match(source, /Male/);
-  assert.match(source, /0\.7/);
-  assert.match(source, /1\.15/);
-  assert.match(source, /Speak source text/);
-  assert.match(source, /Speak translation/);
-  assert.match(source, /Speak result/);
-  assert.doesNotMatch(source, /Define and Hear work best with one word/);
-});
-
-test("usage guidance replaces rewrite-style Refine and reset controls stay horizontal", async () => {
-  const source = await readFile(componentUrl, "utf8");
-  const css = await readFile(cssUrl, "utf8");
-  assert.match(source, /refine:\s*"Usage"/);
-  assert.match(source, /Show real usage, patterns, and a natural example/);
-  assert.match(source, /resetWindowSize/);
-  assert.match(source, /onDoubleClick=\{resetWindowSize\}/);
-  assert.match(css, /floating-window-controls/);
-  assert.match(css, /flex-direction:\s*row\s*!important/);
 });
 
 test("save prepares dictionary and AI vocabulary details in parallel with visible feedback", async () => {
@@ -73,9 +68,14 @@ test("save prepares dictionary and AI vocabulary details in parallel with visibl
   assert.match(source, /Saving…/);
 });
 
-test("context changes cancel stale translation requests", async () => {
+
+test("Target shows a clickable spelling correction without silently replacing the word", async () => {
   const source = await readFile(componentUrl, "utf8");
-  assert.match(source, /translationAbort\.current\?\.abort\(\)/);
-  assert.match(source, /translationSequence\.current \+= 1/);
-  assert.match(source, /function swapLanguages\(\)[\s\S]*translationAbort\.current\?\.abort\(\)/);
+  const css = await readFile(cssUrl, "utf8");
+  assert.match(source, /spellingSuggestion/);
+  assert.match(source, /Did you mean:/);
+  assert.match(source, /你想检索的是不是这个词？/);
+  assert.match(source, /setSelection\(spellingSuggestion\)/);
+  assert.match(source, /setTimeout[\s\S]*320/);
+  assert.match(css, /floating-spelling-suggestion/);
 });

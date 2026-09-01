@@ -165,3 +165,65 @@ test("AI gateway can call Doubao through Volcano Ark", async () => {
   assert.equal(body.model, "doubao-seed-2-1-pro-260628");
   assert.deepEqual(await response.json(), { text: "豆包结果" });
 });
+
+
+test("AI gateway accepts define, relations, and usage as separate vocabulary actions", async () => {
+  for (const capability of ["define", "relations", "usage"]) {
+    const handler = createAiHandler({
+      env: { GEMINI_API_KEY: "gemini-test" },
+      fetch: async () => Response.json({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ text: "ok" }) }] } }],
+      }),
+    });
+
+    const response = await handler(new Request("https://lucid.example/api/ai", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        capability,
+        selection: "subtle",
+        context: "The color shift is subtle but effective.",
+      }),
+    }));
+
+    assert.equal(response.status, 200, capability);
+    assert.deepEqual(await response.json(), { text: "ok" });
+  }
+});
+
+test("vocabulary cards accept normal grammatical inflection in examples", async () => {
+  let calls = 0;
+  const card = {
+    selection: "make sense",
+    validSelection: true,
+    suggestedCorrection: null,
+    chineseMeaning: "有道理；说得通",
+    englishDefinition: "to be understandable or reasonable",
+    pronunciation: "/meɪk sens/",
+    example: "The ending finally makes sense.",
+  };
+  const handler = createAiHandler({
+    env: { GEMINI_API_KEY: "gemini-test" },
+    fetch: async () => {
+      calls += 1;
+      return Response.json({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(card) }] } }],
+      });
+    },
+  });
+
+  const response = await handler(new Request("https://lucid.example/api/ai", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      capability: "vocabulary-card",
+      selection: "make sense",
+      context: "The ending finally makes sense.",
+      sourceLanguage: "en",
+    }),
+  }));
+
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+  assert.deepEqual(await response.json(), card);
+});
