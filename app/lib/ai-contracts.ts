@@ -7,6 +7,9 @@ export type AiRequest =
   | { capability: "daily-plan"; minutes: PlanMode; focus: string; evidence: string[] }
   | { capability: "writing-feedback"; prompt: string; response: string; taskType: "ielts" | "work" | "general" }
   | { capability: "speaking-feedback"; prompt: string; transcript: string; audioAnalyzed: false }
+  | { capability: "define"; selection: string; context: string }
+  | { capability: "relations"; selection: string; context: string }
+  | { capability: "usage"; selection: string; context: string }
   | { capability: "explain"; selection: string; context: string }
   | { capability: "refine"; selection: string; context: string }
   | { capability: "vocabulary-card"; selection: string; context: string; sourceLanguage?: SourceLanguage }
@@ -66,6 +69,65 @@ function normalizedVocabularyText(value: string): string {
   return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase("en-US");
 }
 
+function vocabularyBoundaryMatch(example: string, phrase: string): boolean {
+  const escaped = phrase.replace(/[.*+?^$(){}|[\]\\]/g, "\\function normalizedVocabularyText(value: string): string {
+  return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase("en-US");
+}
+
+");
+  return new RegExp("(^|[^\\p{L}\\p{N}])" + escaped + "(?=$|[^\\p{L}\\p{N}])", "iu").test(example);
+}
+
+function englishInflections(word: string): string[] {
+  const irregular: Record<string, string[]> = {
+    be: ["am", "is", "are", "was", "were", "been", "being"],
+    come: ["comes", "came", "coming"],
+    do: ["does", "did", "done", "doing"],
+    feel: ["feels", "felt", "feeling"],
+    find: ["finds", "found", "finding"],
+    get: ["gets", "got", "gotten", "getting"],
+    go: ["goes", "went", "gone", "going"],
+    have: ["has", "had", "having"],
+    know: ["knows", "knew", "known", "knowing"],
+    make: ["makes", "made", "making"],
+    run: ["runs", "ran", "running"],
+    say: ["says", "said", "saying"],
+    see: ["sees", "saw", "seen", "seeing"],
+    speak: ["speaks", "spoke", "spoken", "speaking"],
+    take: ["takes", "took", "taken", "taking"],
+    think: ["thinks", "thought", "thinking"],
+    write: ["writes", "wrote", "written", "writing"],
+  };
+  const variants = new Set<string>([word, ...(irregular[word] ?? [])]);
+  if (/[^aeiou]y$/u.test(word)) variants.add(word.slice(0, -1) + "ies");
+  else if (/(s|x|z|ch|sh|o)$/u.test(word)) variants.add(word + "es");
+  else variants.add(word + "s");
+  if (/ie$/u.test(word)) {
+    variants.add(word.slice(0, -2) + "ying");
+  } else if (/e$/u.test(word)) {
+    variants.add(word + "d");
+    variants.add(word.slice(0, -1) + "ing");
+  } else if (/[^aeiou]y$/u.test(word)) {
+    variants.add(word.slice(0, -1) + "ied");
+    variants.add(word + "ing");
+  } else {
+    variants.add(word + "ed");
+    variants.add(word + "ing");
+  }
+  return [...variants];
+}
+
+function containsVocabularyPhrase(example: string, phrase: string): boolean {
+  const normalizedExample = normalizedVocabularyText(example);
+  const normalizedPhrase = normalizedVocabularyText(phrase);
+  if (vocabularyBoundaryMatch(normalizedExample, normalizedPhrase)) return true;
+  if (!/^[a-z]+(?:[ '-][a-z]+)*$/iu.test(normalizedPhrase)) return false;
+  const parts = normalizedPhrase.split(" ");
+  if (!parts[0]) return false;
+  return englishInflections(parts[0]).some((variant) =>
+    vocabularyBoundaryMatch(normalizedExample, [variant, ...parts.slice(1)].join(" "))
+  );
+}
 export function validateVocabularyCard(value: unknown, requestedSelection?: string): value is VocabularyCard {
   if (!object(value)
     || typeof value.selection !== "string"
@@ -82,8 +144,7 @@ export function validateVocabularyCard(value: unknown, requestedSelection?: stri
 
   const selection = normalizedVocabularyText(value.selection);
   if (!selection || (requestedSelection && selection !== normalizedVocabularyText(requestedSelection))) return false;
-  const escapedSelection = selection.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapedSelection}(?=$|[^\\p{L}\\p{N}])`, "iu").test(normalizedVocabularyText(value.example));
+  return containsVocabularyPhrase(value.example, selection);
 }
 
 export function validateVocabularyCardResponse(value: unknown, requestedSelection: string): value is VocabularyCard {
