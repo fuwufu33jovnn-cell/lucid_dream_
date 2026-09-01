@@ -39,4 +39,4 @@ jobs:
       - name: Verify Vercel-mode Next.js production build and type-check
         run: npx --no-install next build
         env:
-          GITHUB_ACTIONS: "false"
+          LUCID_SERVER_BUILD: "1"
