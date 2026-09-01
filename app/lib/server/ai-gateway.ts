@@ -89,7 +89,8 @@ function instructionsFor(capability: string): string {
   if (capability === "daily-plan") return "Create a practical English plan whose task minutes sum exactly to the requested budget. Use only local routes. Keep tasks concrete and concise.";
   if (capability === "writing-feedback") return "Give concise, supportive, unofficial IELTS-style or work-English feedback. Preserve the writer's meaning. Never claim an official score. Prioritize a few teachable corrections.";
   if (capability === "speaking-feedback") return "Review only the transcript for fluency, clarity, vocabulary, and grammar. Audio was not analyzed, so pronunciation must be null and audioAnalyzed false.";
-  if (capability === "translate") return "Translate the selected English into concise natural Chinese using the supplied context.";
+  if (capability === "translate") return "Translate the supplied text accurately and naturally from sourceLanguage to targetLanguage. Detect the source language when sourceLanguage is auto. Preserve tone, names, line breaks, and intended meaning. Return only the translation in the text field.";
+  if (capability === "refine") return "Rewrite the selected text so it sounds natural and polished while preserving its language, meaning, tone, and level of formality. Return only the refined version in the text field.";
   return "Explain the selected English in simpler English using the supplied context.";
 }
 

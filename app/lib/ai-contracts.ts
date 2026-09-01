@@ -1,11 +1,15 @@
 import type { PlanMode, TodayTask } from "./models";
 
+export type SourceLanguage = "auto" | "en" | "zh-CN" | "ja" | "ko";
+export type TargetLanguage = Exclude<SourceLanguage, "auto">;
+
 export type AiRequest =
   | { capability: "daily-plan"; minutes: PlanMode; focus: string; evidence: string[] }
   | { capability: "writing-feedback"; prompt: string; response: string; taskType: "ielts" | "work" | "general" }
   | { capability: "speaking-feedback"; prompt: string; transcript: string; audioAnalyzed: false }
   | { capability: "explain"; selection: string; context: string }
-  | { capability: "translate"; selection: string; context: string };
+  | { capability: "refine"; selection: string; context: string }
+  | { capability: "translate"; selection: string; context: string; sourceLanguage?: SourceLanguage; targetLanguage?: TargetLanguage };
 
 export type GeneratedPlan = { tasks: TodayTask[] };
 export type WritingFeedback = {

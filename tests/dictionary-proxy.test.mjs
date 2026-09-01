@@ -29,5 +29,6 @@ test("dictionary route has a fast secondary lexical source and UI fallbacks", as
   assert.match(route, /api\.datamuse\.com\/words/);
   assert.match(route, /md=drp/);
   assert.match(source, /Dictionary fallback requested/);
-  assert.match(source, /action === "pronounce"[\s\S]*speakWithBrowserVoice\(normalized\)/);
+  assert.match(source, /action === "pronounce"[\s\S]*pronounceTarget\(normalized\)/);
+  assert.match(source, /async function pronounceTarget[\s\S]*speakText\(normalized, language\)/);
 });

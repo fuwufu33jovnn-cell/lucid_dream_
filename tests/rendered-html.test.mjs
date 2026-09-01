@@ -124,11 +124,12 @@ test("renders the five-mode Language Lab index", async () => {
   assert.doesNotMatch(html, /MOVE · RESIZE/);
 });
 
-test("keeps all three subtitle modes inside the collapsed study companion", async () => {
+test("keeps the multilingual translator inside the collapsed study companion", async () => {
   const { access, readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../app/components/floating-study-window.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  assert.match(source, /ENGLISH.*中文.*BILINGUAL/s);
+  const overrides = await readFile(new URL("../app/floating-study-window-overrides.css", import.meta.url), "utf8");
+  assert.match(source, /AUTO DETECT.*ENGLISH.*中文.*日本語.*한국어/s);
   assert.match(source, /data-language-tools-root/);
   assert.match(source, /pomeranian-idle\.png/);
   assert.match(source, /pomeranian-wink\.png/);
@@ -139,9 +140,9 @@ test("keeps all three subtitle modes inside the collapsed study companion", asyn
   assert.match(source, /onError/);
   assert.match(css, /pomeranian-wiggle/);
   assert.match(css, /width:\s*44px[\s\S]*height:\s*44px/);
-  assert.match(css, /floating-study-launcher img[^}]*width:\s*24px/);
+  assert.match(overrides, /floating-study-launcher img[^}]*width:\s*100%/);
   assert.match(css, /floating-study-window\.is-open/);
-  assert.match(css, /cubic-bezier\(\.22,\s*1,\s*\.36,\s*1\)/);
+  assert.match(css, /cubic-bezier\(\.16,\s*1,\s*\.3,\s*1\)/);
   assert.match(css, /prefers-reduced-motion:\s*reduce[\s\S]*floating-study-launcher\.is-animating/);
   await access(new URL("../public/brand/pomeranian-idle.png", import.meta.url));
   await access(new URL("../public/brand/pomeranian-wink.png", import.meta.url));

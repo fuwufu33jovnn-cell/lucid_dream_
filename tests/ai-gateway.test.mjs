@@ -8,6 +8,28 @@ test("gateway accepts known capabilities and rejects incomplete or oversized wor
   assert.equal(parseGatewayRequest({ capability: "speaking-feedback", prompt: "Retell", transcript: "x".repeat(20_001), audioAnalyzed: false }).ok, false);
 });
 
+test("gateway accepts multilingual context translation and refine requests", () => {
+  assert.equal(parseGatewayRequest({
+    capability: "translate",
+    selection: "오늘 날씨가 좋아요.",
+    context: "Floating context translator",
+    sourceLanguage: "ko",
+    targetLanguage: "zh-CN",
+  }).ok, true);
+  assert.equal(parseGatewayRequest({
+    capability: "translate",
+    selection: "hello",
+    context: "Floating context translator",
+    sourceLanguage: "xx",
+    targetLanguage: "zh-CN",
+  }).ok, false);
+  assert.equal(parseGatewayRequest({
+    capability: "refine",
+    selection: "i am so blinded by you.",
+    context: "Make this natural while preserving its meaning.",
+  }).ok, true);
+});
+
 test("gateway exposes narrowly scoped CORS headers", () => {
   assert.deepEqual(corsHeaders("https://fuwufu33jovnn-cell.github.io"), {
     "Access-Control-Allow-Origin": "https://fuwufu33jovnn-cell.github.io",
