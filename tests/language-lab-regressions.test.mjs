@@ -35,3 +35,13 @@ test("non-embeddable sources render as a clear source card instead of a fake pla
   assert.match(source, /OPEN OFFICIAL SOURCE/);
   assert.match(css, /\.media-source-card\b/);
 });
+
+test("YouTube embeds send referrer identity and keep direct fallbacks", async () => {
+  const source = await readFile(new URL("../app/components/media-learning-panel.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /referrerPolicy="strict-origin-when-cross-origin"/);
+  assert.match(source, /www\.youtube\.com\/embed/);
+  assert.match(source, /OPEN ON YOUTUBE/);
+  assert.match(source, /FIND CURRENT OFFICIAL VIDEO/);
+  assert.doesNotMatch(source, /rel="noreferrer"/);
+});
