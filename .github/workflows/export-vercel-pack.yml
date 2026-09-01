@@ -1,0 +1,83 @@
+name: Export full Vercel source pack
+
+on:
+  push:
+    branches: ["deploy/full-source-pack-20260902"]
+    paths:
+      - ".github/workflows/export-vercel-pack.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out packaging branch
+        uses: actions/checkout@v4
+
+      - name: Build Vercel file manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+
+          root = Path(".")
+          excluded_dirs = {".git", ".github", "docs", "tests", "examples", ".deploy-pack", ".next", "dist", "node_modules"}
+          excluded_files = {"README.md"}
+
+          files = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file():
+                  continue
+              rel = path.relative_to(root).as_posix()
+              parts = set(path.relative_to(root).parts)
+              if parts & excluded_dirs or rel in excluded_files:
+                  continue
+              data = base64.b64encode(path.read_bytes()).decode("ascii")
+              files.append({"file": rel, "data": data, "encoding": "base64"})
+
+          required = {
+              "public/brand/pomeranian-idle.png",
+              "public/brand/pomeranian-wink.png",
+              "public/brand/pomeranian-assistant.png",
+              "public/brand/logo-board.png",
+              "app/lib/ai-contracts.ts",
+              "app/components/floating-study-window.tsx",
+              "app/lib/server/ai-gateway.ts",
+              "package.json",
+          }
+          paths = {item["file"] for item in files}
+          missing = sorted(required - paths)
+          if missing:
+              raise SystemExit(f"Missing required deployment files: {missing}")
+
+          payload = json.dumps({
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "files": files,
+          }, separators=(",", ":")).encode()
+
+          out = Path(".deploy-pack")
+          out.mkdir(exist_ok=True)
+          for old in out.glob("part-*"):
+              old.unlink()
+          chunk_size = 18000
+          for i in range(0, len(payload), chunk_size):
+              (out / f"part-{i // chunk_size:03d}").write_bytes(payload[i:i+chunk_size])
+
+          print(f"Packed {len(files)} files into {len(list(out.glob('part-*')))} chunks ({len(payload)} bytes JSON).")
+          PY
+
+      - name: Commit source pack chunks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "lucid-dream-deploy-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f .deploy-pack/part-*
+          git commit -m "chore: export complete Vercel source manifest"
+          git push origin HEAD:deploy/full-source-pack-20260902
