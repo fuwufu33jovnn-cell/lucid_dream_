@@ -3,7 +3,7 @@ import { parseGatewayRequest } from "../../../supabase/functions/_shared/ai-cont
 
 type GatewayEnv = Record<string, string | undefined>;
 type FetchLike = typeof globalThis.fetch;
-type Provider = "gemini" | "openai" | "deepseek" | "doubao";
+type Provider = "qwen" | "mistral" | "siliconflow" | "doubao" | "kimi" | "deepseek" | "gemini" | "openai";
 
 type HandlerDependencies = {
   env: GatewayEnv;
@@ -20,10 +20,14 @@ const requestBuckets = new Map<string, { count: number; resetAt: number }>();
 
 export function getConfiguredProviders(env: GatewayEnv): Provider[] {
   const providers: Array<[Provider, string | undefined]> = [
+    ["qwen", env.QWEN_API_KEY],
+    ["mistral", env.MISTRAL_API_KEY],
+    ["siliconflow", env.SILICONFLOW_API_KEY],
+    ["doubao", env.ARK_API_KEY],
+    ["kimi", env.KIMI_API_KEY],
+    ["deepseek", env.DEEPSEEK_API_KEY],
     ["gemini", env.GEMINI_API_KEY],
     ["openai", env.OPENAI_API_KEY],
-    ["deepseek", env.DEEPSEEK_API_KEY],
-    ["doubao", env.ARK_API_KEY],
   ];
   return providers.filter(([, key]) => Boolean(key?.trim())).map(([provider]) => provider);
 }
@@ -125,7 +129,7 @@ function extractOpenAiText(payload: Record<string, unknown>): string | null {
 
 function extractProviderText(provider: Provider, payload: Record<string, unknown>): string | null {
   if (provider === "openai") return extractOpenAiText(payload);
-  if (provider === "deepseek" || provider === "doubao") {
+  if (provider !== "openai" && provider !== "gemini") {
     const choices = payload.choices;
     if (!Array.isArray(choices)) return null;
     const message = choices[0] && typeof choices[0] === "object" ? (choices[0] as Record<string, unknown>).message : null;
@@ -192,16 +196,33 @@ async function callProvider(provider: Provider, key: string, request: Record<str
   if (provider === "gemini") {
     const model = env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
     url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    init = { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(request) }] }], generationConfig: { thinkingConfig: { thinkingLevel: "minimal" }, responseMimeType: "application/json", responseJsonSchema: schema } }) };
+    init = { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions }] }, contents: [{ role: "user", parts: [{ text: JSON.stringify(request) }] }], generationConfig: { thinkingConfig: { thinkingLevel: "low" }, responseMimeType: "application/json", responseJsonSchema: schema } }) };
   } else if (provider === "openai") {
     url = "https://api.openai.com/v1/responses";
     init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.OPENAI_TEXT_MODEL ?? "gpt-5.6-luna", reasoning: { effort: "none" }, instructions, input: JSON.stringify(request), text: { format: { type: "json_schema", name: `lucid_${capability.replaceAll("-", "_")}`, strict: true, schema } } }) };
-  } else if (provider === "deepseek") {
-    url = "https://api.deepseek.com/chat/completions";
-    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.DEEPSEEK_MODEL ?? "deepseek-v4-flash", thinking: { type: "disabled" }, messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }], response_format: { type: "json_object" }, max_tokens: 3_000 }) };
   } else {
-    url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ model: env.DOUBAO_MODEL ?? "doubao-seed-2-1-pro-260628", messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }], max_tokens: 3_000 }) };
+    const compatible: Record<Exclude<Provider, "gemini" | "openai">, { url: string; model: string }> = {
+      qwen: { url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", model: env.QWEN_MODEL ?? "qwen-plus" },
+      mistral: { url: "https://api.mistral.ai/v1/chat/completions", model: env.MISTRAL_MODEL ?? "mistral-small-latest" },
+      siliconflow: { url: "https://api.siliconflow.cn/v1/chat/completions", model: env.SILICONFLOW_MODEL ?? "Qwen/Qwen3-8B" },
+      doubao: { url: "https://ark.cn-beijing.volces.com/api/v3/chat/completions", model: env.DOUBAO_MODEL ?? "doubao-seed-2-1-pro-260628" },
+      kimi: { url: "https://api.moonshot.cn/v1/chat/completions", model: env.KIMI_MODEL ?? "moonshot-v1-8k" },
+      deepseek: { url: "https://api.deepseek.com/chat/completions", model: env.DEEPSEEK_MODEL ?? "deepseek-v4-flash" },
+    };
+    const selected = compatible[provider as Exclude<Provider, "gemini" | "openai">];
+    const body: Record<string, unknown> = {
+      model: selected.model,
+      messages: [{ role: "system", content: `${instructions} Return only valid JSON matching this schema: ${JSON.stringify(schema)}` }, { role: "user", content: JSON.stringify(request) }],
+      max_tokens: 3_000,
+    };
+    if (provider === "deepseek") {
+      body.thinking = { type: "disabled" };
+      body.response_format = { type: "json_object" };
+    }
+    if (provider === "siliconflow" && /^Qwen\/Qwen3/i.test(selected.model)) body.enable_thinking = false;
+    if (provider === "kimi" && /^kimi-k2\.(5|6)$/i.test(selected.model)) body.thinking = { type: "disabled" };
+    url = selected.url;
+    init = { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify(body) };
   }
 
   try {
@@ -262,10 +283,14 @@ export function createAiHandler({ env, fetch: fetcher }: HandlerDependencies) {
     if (!parsed.ok) return json({ error: parsed.message }, 400);
 
     const providers: Array<[Provider, string | undefined]> = [
+      ["qwen", env.QWEN_API_KEY],
+      ["mistral", env.MISTRAL_API_KEY],
+      ["siliconflow", env.SILICONFLOW_API_KEY],
+      ["doubao", env.ARK_API_KEY],
+      ["kimi", env.KIMI_API_KEY],
+      ["deepseek", env.DEEPSEEK_API_KEY],
       ["gemini", env.GEMINI_API_KEY],
       ["openai", env.OPENAI_API_KEY],
-      ["deepseek", env.DEEPSEEK_API_KEY],
-      ["doubao", env.ARK_API_KEY],
     ];
     if (getConfiguredProviders(env).length === 0) return json({ error: "AI is not configured yet." }, 503);
 
