@@ -12,9 +12,16 @@ test("gateway accepts known capabilities and rejects incomplete or oversized wor
 
 test("gateway accepts multilingual context translation and refine requests", () => {
   assert.equal(parseGatewayRequest({
-    capability: "translate",
+    capability: "context-translate",
     selection: "오늘 날씨가 좋아요.",
-    context: "Floating context translator",
+    context: "Floating context sentence translator",
+    sourceLanguage: "ko",
+    targetLanguage: "zh-CN",
+  }).ok, true);
+  assert.equal(parseGatewayRequest({
+    capability: "translate",
+    selection: "날씨",
+    context: "Vocabulary translation inside the same sentence.",
     sourceLanguage: "ko",
     targetLanguage: "zh-CN",
   }).ok, true);
