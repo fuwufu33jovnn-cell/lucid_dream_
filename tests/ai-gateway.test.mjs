@@ -30,6 +30,21 @@ test("gateway accepts multilingual context translation and refine requests", () 
   }).ok, true);
 });
 
+test("gateway accepts structured vocabulary-card requests", () => {
+  assert.equal(parseGatewayRequest({
+    capability: "vocabulary-card",
+    selection: "make sense",
+    context: "The ending finally makes sense.",
+    sourceLanguage: "en",
+  }).ok, true);
+  assert.equal(parseGatewayRequest({
+    capability: "vocabulary-card",
+    selection: "make sense",
+    context: "The ending finally makes sense.",
+    sourceLanguage: "xx",
+  }).ok, false);
+});
+
 test("gateway exposes narrowly scoped CORS headers", () => {
   assert.deepEqual(corsHeaders("https://fuwufu33jovnn-cell.github.io"), {
     "Access-Control-Allow-Origin": "https://fuwufu33jovnn-cell.github.io",
