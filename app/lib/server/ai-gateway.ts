@@ -206,7 +206,7 @@ async function callProvider(provider: Provider, key: string, request: Record<str
       mistral: { url: "https://api.mistral.ai/v1/chat/completions", model: env.MISTRAL_MODEL ?? "mistral-small-latest" },
       siliconflow: { url: "https://api.siliconflow.cn/v1/chat/completions", model: env.SILICONFLOW_MODEL ?? "Qwen/Qwen3-8B" },
       doubao: { url: "https://ark.cn-beijing.volces.com/api/v3/chat/completions", model: env.DOUBAO_MODEL ?? "doubao-seed-2-1-pro-260628" },
-      kimi: { url: "https://api.moonshot.cn/v1/chat/completions", model: env.KIMI_MODEL ?? "moonshot-v1-8k" },
+      kimi: { url: "https://api.moonshot.cn/v1/chat/completions", model: env.KIMI_MODEL ?? "kimi-k2.6" },
       deepseek: { url: "https://api.deepseek.com/chat/completions", model: env.DEEPSEEK_MODEL ?? "deepseek-v4-flash" },
     };
     const selected = compatible[provider as Exclude<Provider, "gemini" | "openai">];
