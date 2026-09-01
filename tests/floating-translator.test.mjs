@@ -5,24 +5,26 @@ import test from "node:test";
 const componentUrl = new URL("../app/components/floating-study-window.tsx", import.meta.url);
 const cssUrl = new URL("../app/floating-study-window-overrides.css", import.meta.url);
 
-test("context works as a multilingual live translator with Korean", async () => {
+test("context translator is multilingual but only runs when the user asks", async () => {
   const source = await readFile(componentUrl, "utf8");
   assert.match(source, /sourceLanguage/);
   assert.match(source, /targetLanguage/);
   assert.match(source, /AUTO DETECT/);
   assert.match(source, /한국어/);
   assert.match(source, /translateContext/);
-  assert.match(source, /setTimeout\([^)]*translateContext|translateContext\([^)]*auto/s);
-  assert.match(source, />Translate now</);
-  assert.match(source, /translationTimer/);
-  assert.doesNotMatch(source, /disabled=\{!sourceText\.trim\(\) \|\| translationState === "working"\}/);
+  assert.doesNotMatch(source, /translateContext\("auto"\)/);
+  assert.doesNotMatch(source, /translationTimer/);
+  assert.match(source, /onClick=\{\(\) => void translateContext\(\)\}/);
+  assert.match(source, /disabled=\{!sourceText\.trim\(\) \|\| translationState === "working"\}/);
 });
 
-test("highlighted context text becomes the action target", async () => {
+test("highlighted context text can be copied with Enter without deleting the source", async () => {
   const source = await readFile(componentUrl, "utf8");
   assert.match(source, /onSelect=\{captureTextareaSelection\}/);
+  assert.match(source, /onKeyDown=\{handleSourceKeyDown\}/);
+  assert.match(source, /event\.preventDefault\(\)/);
   assert.match(source, /setSelection\(chosen\)/);
-  assert.match(source, /word or phrase is ready/i);
+  assert.match(source, /source sentence stays unchanged/i);
 });
 
 test("speech controls cover context sentences, action results, speed and voice style", async () => {
@@ -39,12 +41,20 @@ test("speech controls cover context sentences, action results, speed and voice s
   assert.doesNotMatch(source, /Define and Hear work best with one word/);
 });
 
-test("refine is available and the window has explicit and dog-double-click reset", async () => {
+test("usage guidance replaces rewrite-style Refine and reset controls stay horizontal", async () => {
   const source = await readFile(componentUrl, "utf8");
   const css = await readFile(cssUrl, "utf8");
-  assert.match(source, /"refine"/);
+  assert.match(source, /refine:\s*"Usage"/);
+  assert.match(source, /Show real usage, patterns, and a natural example/);
   assert.match(source, /resetWindowSize/);
   assert.match(source, /onDoubleClick=\{resetWindowSize\}/);
-  assert.match(source, /Reset window size/);
   assert.match(css, /floating-window-controls/);
+  assert.match(css, /flex-direction:\s*row\s*!important/);
+});
+
+test("save prepares dictionary and AI vocabulary details in parallel with visible feedback", async () => {
+  const source = await readFile(componentUrl, "utf8");
+  assert.match(source, /Promise\.all\(\[dictionaryPromise, cardPromise\]\)/);
+  assert.match(source, /Building a complete card/);
+  assert.match(source, /Saving…/);
 });
