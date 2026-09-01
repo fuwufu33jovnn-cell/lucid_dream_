@@ -65,7 +65,7 @@ jobs:
           out.mkdir(exist_ok=True)
           for old in out.glob("part-*"):
               old.unlink()
-          chunk_size = 18000
+          chunk_size = 60000
           for i in range(0, len(payload), chunk_size):
               (out / f"part-{i // chunk_size:03d}").write_bytes(payload[i:i+chunk_size])
 
