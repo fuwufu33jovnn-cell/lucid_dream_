@@ -330,6 +330,34 @@
   box-shadow: 0 0 0 3px rgba(23,23,23,.08);
 }
 
+.floating-spelling-suggestion {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  margin-top: 1px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 9px;
+  background: #f1f1ee;
+  color: #555;
+  cursor: pointer;
+  text-align: left;
+}
+.floating-spelling-suggestion:hover { background: #e9e9e4; }
+.floating-spelling-suggestion span,
+.floating-spelling-suggestion small { font-size: 8px; }
+.floating-spelling-suggestion strong {
+  color: #171717;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.floating-spelling-suggestion small {
+  margin-left: auto;
+  color: #858581;
+}
+
 .floating-tool-actions {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
