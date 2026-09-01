@@ -218,6 +218,65 @@
 }
 .floating-translate-now:disabled { cursor: wait; opacity: .45; }
 
+.floating-context-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.floating-context-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #777;
+  font-size: 8px;
+  font-weight: 700;
+}
+.floating-context-toolbar select {
+  min-height: 30px;
+  padding: 0 24px 0 8px;
+  border: 1px solid #ddddda;
+  border-radius: 8px;
+  background: #fafaf8;
+  color: #333;
+  font-size: 8px;
+}
+.floating-context-speak {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid #ddddda;
+  border-radius: 50%;
+  background: #fafaf8;
+  color: #555;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+.floating-context-speak:hover { background: #e8e8e3; color: #111; }
+.floating-context-pane textarea {
+  display: block;
+  width: 100%;
+  min-height: 118px;
+  max-height: 260px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid #d5d5d2;
+  border-radius: 11px;
+  background: #fff;
+  color: #171717;
+  -webkit-text-fill-color: #171717;
+  caret-color: #171717;
+  opacity: 1;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.floating-context-pane textarea::placeholder { color: #9a9a96; -webkit-text-fill-color: #9a9a96; opacity: 1; }
+.floating-context-pane textarea:focus { border-color: #171717; box-shadow: 0 0 0 3px rgba(23,23,23,.08); }
 .floating-speech-controls {
   display: flex;
   justify-content: flex-end;
@@ -296,7 +355,8 @@
   background: #fff;
 }
 .floating-tool-actions button:disabled { cursor: wait; opacity: .52; }
-.floating-tool-actions button[data-primary="true"] { border-color: #171717; background: #171717; color: #fff; }
+.floating-tool-actions button[data-active="true"] { border-color: #171717; background: #171717; color: #fff; }
+.floating-tool-actions button[data-active="true"]:hover:not(:disabled) { background: #171717; color: #fff; }
 
 .floating-result-panel {
   margin: 10px 12px 0;
