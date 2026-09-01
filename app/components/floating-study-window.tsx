@@ -20,7 +20,7 @@ const actionLabels: Record<StudyAction, string> = {
   define: "Define",
   pronounce: "Hear",
   explain: "Explain",
-  refine: "Refine",
+  refine: "Usage",
   translate: "Translate",
   save: "Save",
 };
@@ -73,7 +73,7 @@ export function FloatingStudyWindow({
   const [selection, setSelection] = useState("");
   const [selectionSaved, setSelectionSaved] = useState(false);
   const [entry, setEntry] = useState<DictionaryEntry | null>(null);
-  const [message, setMessage] = useState("Type or paste text above. Translation appears automatically.");
+  const [message, setMessage] = useState("Type or paste text above. Press Translate when you want a translation.");
   const [resultText, setResultText] = useState("");
   const [resultLanguage, setResultLanguage] = useState<SpeechLanguage>("en-US");
   const [speechRate, setSpeechRate] = useState<SpeechRate>(1);
@@ -83,7 +83,6 @@ export function FloatingStudyWindow({
   const windowRef = useRef<HTMLElement | null>(null);
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const launcherTimer = useRef<number | null>(null);
-  const translationTimer = useRef<number | null>(null);
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
   const translationSequence = useRef(0);
   const saveCheckSequence = useRef(0);
@@ -135,11 +134,7 @@ export function FloatingStudyWindow({
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
-  const translateContext = useCallback(async (trigger: "auto" | "manual") => {
-    if (trigger === "manual" && translationTimer.current != null) {
-      window.clearTimeout(translationTimer.current);
-      translationTimer.current = null;
-    }
+  const translateContext = useCallback(async () => {
     const text = sourceText.trim();
     if (!text) {
       translationSequence.current += 1;
@@ -153,39 +148,24 @@ export function FloatingStudyWindow({
     const result = await requestAi<{ text: string }>({
       capability: "translate",
       selection: text.slice(0, 8_000),
-      context: trigger === "auto" ? "Live context translation while the learner types." : "User-confirmed context translation.",
+      context: "User-confirmed context translation. Return only the requested target language.",
       sourceLanguage,
       targetLanguage,
     });
     if (requestId !== translationSequence.current) return;
     if (!result.ok) {
       setTranslationState("error");
-      if (trigger === "manual") setMessage(result.message);
+      setMessage(result.message);
       return;
     }
     setTranslatedText(result.data.text);
     setTranslationState("ready");
+    setMessage("Translation ready.");
   }, [sourceLanguage, sourceText, targetLanguage]);
 
-  useEffect(() => {
-    if (!open || !sourceText.trim()) return;
-    translationTimer.current = window.setTimeout(() => {
-      translationTimer.current = null;
-      void translateContext("auto");
-    }, 650);
-    return () => {
-      if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
-      translationTimer.current = null;
-    };
-  }, [open, sourceText, sourceLanguage, targetLanguage, translateContext]);
-
   function updateSourceText(value: string) {
-    setSourceText(value);
-    if (value.trim()) {
-      setTranslationState("idle");
-      return;
-    }
     translationSequence.current += 1;
+    setSourceText(value);
     setTranslatedText("");
     setTranslationState("idle");
   }
@@ -259,6 +239,18 @@ export function FloatingStudyWindow({
     setEntry(null);
     setResultText("");
     setMessage(`Word or phrase is ready in Target: “${chosen}”. Choose an action below.`);
+  }
+
+  function handleSourceKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    const target = event.currentTarget;
+    const chosen = normalizeSelection(target.value.slice(target.selectionStart, target.selectionEnd));
+    if (!chosen) return;
+    event.preventDefault();
+    setSelection(chosen);
+    setEntry(null);
+    setResultText("");
+    setMessage(`Copied “${chosen}” to Target. The source sentence stays unchanged.`);
   }
 
   function speechLanguage(language: SourceLanguage | TargetLanguage, text: string): SpeechLanguage {
@@ -339,18 +331,19 @@ export function FloatingStudyWindow({
             return;
           }
 
-          let dictionary: DictionaryEntry | null = null;
           const language = speechLanguage(sourceLanguage, normalized);
-          if (language === "en-US" && !/\s/u.test(normalized)) {
-            try { dictionary = await lookupDictionary(normalized); } catch { dictionary = null; }
-          }
-
-          const cardResult = await requestAi<VocabularyCard>({
+          const dictionaryPromise: Promise<DictionaryEntry | null> =
+            language === "en-US" && !/\s/u.test(normalized)
+              ? lookupDictionary(normalized).catch(() => null)
+              : Promise.resolve(null);
+          const cardPromise = requestAi<VocabularyCard>({
             capability: "vocabulary-card",
             selection: normalized,
             context: sourceText.slice(0, 1_000),
             sourceLanguage,
           });
+          setMessage(`Building a complete card for “${normalized}”…`);
+          const [dictionary, cardResult] = await Promise.all([dictionaryPromise, cardPromise]);
           const savedAt = Date.now();
           const completeRecord = completeVocabularyRecord({
             id: vocabularyRecordId(normalized),
@@ -473,18 +466,28 @@ export function FloatingStudyWindow({
         </div>
 
         <section className="floating-step floating-context-step">
-          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT TRANSLATOR</strong><span>Live translation as you type</span></div>
+          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT TRANSLATOR</strong><span>Translate only when you choose</span></div>
           <div className="floating-language-bar">
             <label>
               <span className="sr-only">Source language</span>
-              <select value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value as SourceLanguage)}>
+              <select value={sourceLanguage} onChange={(event) => {
+                translationSequence.current += 1;
+                setSourceLanguage(event.target.value as SourceLanguage);
+                setTranslatedText("");
+                setTranslationState("idle");
+              }}>
                 {sourceLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
               </select>
             </label>
             <button type="button" onClick={swapLanguages} aria-label="Swap translation languages" title="Swap languages">⇄</button>
             <label>
               <span className="sr-only">Target language</span>
-              <select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value as TargetLanguage)}>
+              <select value={targetLanguage} onChange={(event) => {
+                translationSequence.current += 1;
+                setTargetLanguage(event.target.value as TargetLanguage);
+                setTranslatedText("");
+                setTranslationState("idle");
+              }}>
                 {targetLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
               </select>
             </label>
@@ -497,6 +500,7 @@ export function FloatingStudyWindow({
                 value={sourceText}
                 onChange={(event) => updateSourceText(event.target.value)}
                 onSelect={captureTextareaSelection}
+                onKeyDown={handleSourceKeyDown}
                 placeholder="Type a word, phrase, or sentence…"
               />
               <button type="button" className="floating-speak-button" onClick={() => speakText(sourceText, speechLanguage(sourceLanguage, sourceText))} aria-label="Speak source text" title="Speak source text">◖))</button>
@@ -517,7 +521,7 @@ export function FloatingStudyWindow({
             <span className={`floating-translation-state is-${translationState}`} aria-live="polite">
               {translationState === "working" ? "TRANSLATING…" : translationState === "ready" ? "TRANSLATED" : translationState === "error" ? "TRANSLATION PAUSED" : "READY"}
             </span>
-            <button type="button" className="floating-translate-now" onClick={() => void translateContext("manual")} disabled={!sourceText.trim()}>Translate now</button>
+            <button type="button" className="floating-translate-now" onClick={() => void translateContext()} disabled={!sourceText.trim() || translationState === "working"}>{translationState === "working" ? "Translating…" : "Translate"}</button>
           </div>
 
           <div className="floating-speech-controls">
@@ -562,10 +566,10 @@ export function FloatingStudyWindow({
                 disabled={!!busyAction}
                 data-primary={action === "explain" ? "true" : "false"}
                 data-saved={action === "save" && selectionSaved ? "true" : undefined}
-                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Make the text more natural" : action === "translate" ? "Translate the target" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
+                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Show real usage, patterns, and a natural example" : action === "translate" ? "Translate the target" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
                 onClick={() => void act(action)}
               >
-                {busyAction === action ? "…" : action === "save" && selectionSaved ? "Undo" : actionLabels[action]}
+                {busyAction === action ? (action === "save" ? "Saving…" : action === "translate" ? "Translating…" : "Working…") : action === "save" && selectionSaved ? "Undo" : actionLabels[action]}
               </button>
             ))}
           </div>
@@ -586,7 +590,7 @@ export function FloatingStudyWindow({
           {resultText && <p className="floating-action-result">{resultText}</p>}
         </div>
 
-        <small className="subtitle-honesty">Tip: highlight any word or phrase in either translation box and it jumps into Target. Double-click the dog to restore the default window size.</small>
+        <small className="subtitle-honesty">Tip: highlight a word or phrase, then press Enter to copy it into Target without deleting it from the source. Double-click the dog to restore the default window size.</small>
       </aside>
     </div>
   );
