@@ -5,7 +5,7 @@ import { requestAi } from "../lib/ai-client";
 import type { SourceLanguage, TargetLanguage, VocabularyCard } from "../lib/ai-contracts";
 import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
 import type { VocabularyRecord } from "../lib/models";
-import { lookupDictionary, normalizeSelection } from "../lib/language-tools";
+import { lookupDictionary, normalizeSelection, suggestDictionaryWord, type DictionaryEntry } from "../lib/language-tools";
 import { detectSpeechLanguage, pickNaturalVoice, type SpeechLanguage, type VoiceGender } from "../lib/pronunciation";
 import { completeVocabularyRecord, normalizeVocabularyKey, sameVocabularySelection, vocabularyRecordId } from "../lib/vocabulary";
 import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
@@ -66,6 +66,7 @@ export function FloatingStudyWindow({
   const [sourceText, setSourceText] = useState(initialText);
   const [selection, setSelection] = useState("");
   const [selectionSaved, setSelectionSaved] = useState(false);
+  const [spellingSuggestion, setSpellingSuggestion] = useState<string | null>(null);
   const [message, setMessage] = useState("Paste or type context above, then highlight a word or phrase.");
   const [resultText, setResultText] = useState("");
   const [resultLanguage, setResultLanguage] = useState<SpeechLanguage>("en-US");
@@ -79,6 +80,7 @@ export function FloatingStudyWindow({
   const launcherTimer = useRef<number | null>(null);
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
   const saveCheckSequence = useRef(0);
+  const suggestionSequence = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -102,6 +104,28 @@ export function FloatingStudyWindow({
       .catch(() => {
         if (requestId === saveCheckSequence.current) setSelectionSaved(false);
       });
+  }, [selection]);
+
+  useEffect(() => {
+    const normalized = normalizeSelection(selection);
+    const requestId = ++suggestionSequence.current;
+    setSpellingSuggestion(null);
+    if (!/^[A-Za-z][A-Za-z'-]{2,}$/u.test(normalized)) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void suggestDictionaryWord(normalized, controller.signal).then((suggestion) => {
+        if (requestId !== suggestionSequence.current || controller.signal.aborted) return;
+        if (suggestion && suggestion.toLocaleLowerCase("en-US") !== normalized.toLocaleLowerCase("en-US")) {
+          setSpellingSuggestion(suggestion);
+        }
+      });
+    }, 320);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [selection]);
 
   useEffect(() => {
@@ -473,6 +497,23 @@ export function FloatingStudyWindow({
               autoComplete="off"
             />
           </label>
+          {spellingSuggestion && (
+            <button
+              type="button"
+              className="floating-spelling-suggestion"
+              onClick={() => {
+                setSelection(spellingSuggestion);
+                setSpellingSuggestion(null);
+                setResultText("");
+                setMessage(`Target corrected to “${spellingSuggestion}”.`);
+                window.requestAnimationFrame(() => targetInputRef.current?.focus());
+              }}
+            >
+              <span>Did you mean:</span>
+              <strong>{spellingSuggestion}</strong>
+              <small>你想检索的是不是这个词？</small>
+            </button>
+          )}
         </section>
 
         <section className="floating-step">
