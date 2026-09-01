@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestAi } from "../lib/ai-client";
 import type { SourceLanguage, TargetLanguage, VocabularyCard } from "../lib/ai-contracts";
 import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
 import type { VocabularyRecord } from "../lib/models";
-import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../lib/language-tools";
+import { lookupDictionary, normalizeSelection } from "../lib/language-tools";
 import { detectSpeechLanguage, pickNaturalVoice, type SpeechLanguage, type VoiceGender } from "../lib/pronunciation";
 import { completeVocabularyRecord, normalizeVocabularyKey, sameVocabularySelection, vocabularyRecordId } from "../lib/vocabulary";
 import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
 
-type StudyAction = "define" | "pronounce" | "explain" | "refine" | "translate" | "save";
+type StudyAction = "define" | "pronounce" | "relations" | "usage" | "translate" | "save";
 type SpeechRate = 0.7 | 0.85 | 1 | 1.15;
 
 const publicBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -19,8 +19,8 @@ const pomeranianWinkSrc = `${publicBasePath}/brand/pomeranian-wink.png`;
 const actionLabels: Record<StudyAction, string> = {
   define: "Define",
   pronounce: "Hear",
-  explain: "Explain",
-  refine: "Usage",
+  relations: "Syn/Ant",
+  usage: "Usage",
   translate: "Translate",
   save: "Save",
 };
@@ -31,9 +31,6 @@ const sourceLanguages: Array<{ value: SourceLanguage; label: string }> = [
   { value: "ja", label: "日本語" },
   { value: "ko", label: "한국어" },
 ];
-const targetLanguages: Array<{ value: TargetLanguage; label: string }> = sourceLanguages.filter(
-  (language): language is { value: TargetLanguage; label: string } => language.value !== "auto",
-);
 const speechLanguageMap: Record<TargetLanguage, SpeechLanguage> = {
   en: "en-US",
   "zh-CN": "zh-CN",
@@ -47,10 +44,6 @@ function detectedTargetLanguage(text: string): TargetLanguage {
   if (detected === "ja-JP") return "ja";
   if (detected === "ko-KR") return "ko";
   return "en";
-}
-
-function alternateTargetLanguage(source: TargetLanguage): TargetLanguage {
-  return source === "en" ? "zh-CN" : "en";
 }
 
 export function FloatingStudyWindow({
@@ -70,14 +63,10 @@ export function FloatingStudyWindow({
   const [launcherPosition, setLauncherPosition] = useState({ x: 10, y: 120 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [sourceLanguage, setSourceLanguage] = useState<SourceLanguage>("auto");
-  const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>("zh-CN");
   const [sourceText, setSourceText] = useState(initialText);
-  const [translatedText, setTranslatedText] = useState("");
-  const [translationState, setTranslationState] = useState<"idle" | "working" | "ready" | "error">("idle");
   const [selection, setSelection] = useState("");
   const [selectionSaved, setSelectionSaved] = useState(false);
-  const [entry, setEntry] = useState<DictionaryEntry | null>(null);
-  const [message, setMessage] = useState("Type or paste text above. Translation appears automatically.");
+  const [message, setMessage] = useState("Paste or type context above, then highlight a word or phrase.");
   const [resultText, setResultText] = useState("");
   const [resultLanguage, setResultLanguage] = useState<SpeechLanguage>("en-US");
   const [speechRate, setSpeechRate] = useState<SpeechRate>(1);
@@ -88,20 +77,12 @@ export function FloatingStudyWindow({
   const targetInputRef = useRef<HTMLInputElement | null>(null);
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const launcherTimer = useRef<number | null>(null);
-  const translationTimer = useRef<number | null>(null);
-  const translationAbort = useRef<AbortController | null>(null);
-  const translationCache = useRef(new Map<string, string>());
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
-  const translationSequence = useRef(0);
   const saveCheckSequence = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      translationAbort.current?.abort();
-      translationSequence.current += 1;
       setSourceText(initialText);
-      setTranslatedText("");
-      setTranslationState("idle");
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activityId, initialText]);
@@ -142,84 +123,11 @@ export function FloatingStudyWindow({
 
   useEffect(() => () => {
     if (launcherTimer.current != null) window.clearTimeout(launcherTimer.current);
-    if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
-    translationAbort.current?.abort();
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
-  useEffect(() => {
-    const text = sourceText.trim();
-    const effectiveSource = sourceLanguage === "auto" ? detectedTargetLanguage(text) : sourceLanguage;
-    if (!text && sourceLanguage === "auto") return;
-    if (effectiveSource !== targetLanguage) return;
-    setTargetLanguage(alternateTargetLanguage(effectiveSource));
-  }, [sourceLanguage, sourceText, targetLanguage]);
-
-  const translateContext = useCallback(async (trigger: "auto" | "manual") => {
-    if (trigger === "manual" && translationTimer.current != null) {
-      window.clearTimeout(translationTimer.current);
-      translationTimer.current = null;
-    }
-    const text = sourceText.trim();
-    if (!text) {
-      translationSequence.current += 1;
-      setTranslatedText("");
-      setTranslationState("idle");
-      return;
-    }
-
-    const requestId = ++translationSequence.current;
-    const requestKey = `${sourceLanguage}|${targetLanguage}|${text}`;
-    const cached = translationCache.current.get(requestKey);
-    if (cached) {
-      setTranslatedText(cached);
-      setTranslationState("ready");
-      return;
-    }
-
-    translationAbort.current?.abort();
-    const controller = new AbortController();
-    translationAbort.current = controller;
-    setTranslationState("working");
-    const result = await requestAi<{ text: string }>({
-      capability: "translate",
-      selection: text.slice(0, 8_000),
-      context: trigger === "auto" ? "Live context translation while the learner types." : "User-confirmed context translation.",
-      sourceLanguage,
-      targetLanguage,
-    }, { timeoutMs: 9_000, signal: controller.signal });
-    if (controller.signal.aborted || requestId !== translationSequence.current) return;
-    if (!result.ok) {
-      setTranslationState("error");
-      setMessage(trigger === "manual" ? result.message : "Translation paused. Tap Translate now to retry.");
-      return;
-    }
-    translationCache.current.set(requestKey, result.data.text);
-    setTranslatedText(result.data.text);
-    setTranslationState("ready");
-  }, [sourceLanguage, sourceText, targetLanguage]);
-
-  useEffect(() => {
-    if (!open || !sourceText.trim()) return;
-    translationTimer.current = window.setTimeout(() => {
-      translationTimer.current = null;
-      void translateContext("auto");
-    }, 450);
-    return () => {
-      if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
-      translationTimer.current = null;
-    };
-  }, [open, sourceText, sourceLanguage, targetLanguage, translateContext]);
-
   function updateSourceText(value: string) {
     setSourceText(value);
-    if (value.trim()) {
-      setTranslationState("idle");
-      return;
-    }
-    translationSequence.current += 1;
-    setTranslatedText("");
-    setTranslationState("idle");
   }
 
   function toggleStudyWindow() {
@@ -287,7 +195,6 @@ export function FloatingStudyWindow({
     const chosen = normalizeSelection(target.value.slice(target.selectionStart, target.selectionEnd));
     if (!chosen) return "";
     setSelection(chosen);
-    setEntry(null);
     setResultText("");
     setMessage(`Word or phrase is ready in Target: “${chosen}”. Choose an action below.`);
     return chosen;
@@ -324,17 +231,6 @@ export function FloatingStudyWindow({
     return true;
   }
 
-  function swapLanguages() {
-    const resolvedSource = sourceLanguage === "auto" ? detectedTargetLanguage(sourceText) : sourceLanguage;
-    translationAbort.current?.abort();
-    translationSequence.current += 1;
-    setSourceLanguage(targetLanguage);
-    setTargetLanguage(resolvedSource);
-    setSourceText(translatedText);
-    setTranslatedText(sourceText);
-    setTranslationState(sourceText.trim() ? "ready" : "idle");
-  }
-
   async function pronounceTarget(normalized: string) {
     const language = speechLanguage(sourceLanguage, normalized);
     const canUseDictionaryAudio = language === "en-US" && !/\s/u.test(normalized) && voiceGender === "auto";
@@ -345,7 +241,6 @@ export function FloatingStudyWindow({
 
     try {
       const result = await lookupDictionary(normalized);
-      setEntry(result);
       if (result?.audioUrl) {
         const audio = new Audio(result.audioUrl);
         audio.playbackRate = speechRate;
@@ -369,7 +264,6 @@ export function FloatingStudyWindow({
     setBusyAction(action);
     setLastAction(action);
     if (action !== "save") {
-      setEntry(null);
       setResultText("");
     }
     setMessage(`${action === "save" && selectionSaved ? "Undo" : actionLabels[action]}…`);
@@ -433,51 +327,58 @@ export function FloatingStudyWindow({
       }
 
       if (action === "define") {
-        if (/\s/u.test(normalized)) {
-          setMessage("Define is for a single word. Use Explain for a phrase or sentence.");
+        const result = await requestAi<{ text: string }>({
+          capability: "define",
+          selection: normalized,
+          context: sourceText.slice(0, 1_000),
+        });
+        if (!result.ok) {
+          setMessage(result.message);
           return;
         }
-        try {
-          const result = await lookupDictionary(normalized);
-          setEntry(result);
-          const definition = result?.meanings[0]?.definition;
-          if (definition) {
-            setResultText(definition);
-            setResultLanguage("en-US");
-            setMessage("Dictionary result ready.");
-            return;
-          }
-        } catch {
-          // AI definition below is the deliberate fallback.
-        }
-        const fallback = await requestAi<{ text: string }>({
-          capability: "explain",
-          selection: normalized,
-          context: `Dictionary fallback requested. Give one concise learner-friendly definition. Study context: ${sourceText.slice(0, 600)}`,
-        });
-        if (fallback.ok) {
-          setResultText(fallback.data.text);
-          setResultLanguage("en-US");
-          setMessage("AI definition ready.");
-        } else setMessage(fallback.message);
+        setResultText(result.data.text);
+        setResultLanguage(speechLanguage(sourceLanguage, normalized));
+        setMessage("Definition ready.");
         return;
       }
 
-      const request = action === "translate"
-        ? { capability: "translate" as const, selection: normalized, context: sourceText.slice(0, 1_000), sourceLanguage, targetLanguage }
-        : { capability: action, selection: normalized, context: sourceText.slice(0, 1_000) };
-      const result = await requestAi<{ text: string }>(request);
+      if (action === "translate") {
+        const wordCount = normalized.split(/\s+/u).filter(Boolean).length;
+        if (wordCount > 12 || /[.!?。！？]\s*$/u.test(normalized)) {
+          setMessage("Translate is for a word or short phrase. Highlight only the part you want translated.");
+          return;
+        }
+        const detectedSource = sourceLanguage === "auto" ? detectedTargetLanguage(normalized) : sourceLanguage;
+        const translationTarget: TargetLanguage = detectedSource === "zh-CN" ? "en" : "zh-CN";
+        const result = await requestAi<{ text: string }>({
+          capability: "translate",
+          selection: normalized,
+          context: `Translate only the selected word or short phrase. The surrounding context is reference only: ${sourceText.slice(0, 850)}`,
+          sourceLanguage,
+          targetLanguage: translationTarget,
+        });
+        if (!result.ok) {
+          setMessage(result.message);
+          return;
+        }
+        setResultText(result.data.text);
+        setResultLanguage(speechLanguageMap[translationTarget]);
+        setMessage("Translation ready.");
+        return;
+      }
+
+      const capability = action === "relations" ? "relations" : "usage";
+      const result = await requestAi<{ text: string }>({
+        capability,
+        selection: normalized,
+        context: sourceText.slice(0, 1_000),
+      });
       if (!result.ok) {
         setMessage(result.message);
         return;
       }
-      const language = action === "translate"
-        ? speechLanguageMap[targetLanguage]
-        : action === "refine"
-          ? speechLanguage(sourceLanguage, normalized)
-          : "en-US";
       setResultText(result.data.text);
-      setResultLanguage(language);
+      setResultLanguage(speechLanguage(sourceLanguage, normalized));
       setMessage(`${actionLabels[action]} result ready.`);
     } finally {
       setBusyAction(null);
@@ -521,61 +422,26 @@ export function FloatingStudyWindow({
         </div>
 
         <section className="floating-step floating-context-step">
-          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT TRANSLATOR</strong><span>Live translation as you type</span></div>
-          <div className="floating-language-bar">
+          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT</strong><span>Paste a sentence, then highlight a word or phrase</span></div>
+          <div className="floating-context-toolbar">
             <label>
-              <span className="sr-only">Source language</span>
+              <span>Language</span>
               <select value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value as SourceLanguage)}>
-                {sourceLanguages.map((language) => (
-                  <option key={language.value} value={language.value}>
-                    {language.value === "auto" && sourceText.trim()
-                      ? `AUTO · ${targetLanguages.find((item) => item.value === detectedTargetLanguage(sourceText))?.label ?? "DETECT"}`
-                      : language.label}
-                  </option>
-                ))}
+                {sourceLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
               </select>
             </label>
-            <button type="button" onClick={swapLanguages} aria-label="Swap translation languages" title="Swap languages">⇄</button>
-            <label>
-              <span className="sr-only">Target language</span>
-              <select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value as TargetLanguage)}>
-                {targetLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
-              </select>
-            </label>
+            <button type="button" className="floating-context-speak" onClick={() => speakText(sourceText, speechLanguage(sourceLanguage, sourceText))} aria-label="Speak context" title="Speak context">◖))</button>
           </div>
-
-          <div className="subtitle-study-copy" data-language-tools-root>
-            <div className="floating-translation-pane">
-              <textarea
-                aria-label="Source text"
-                value={sourceText}
-                onChange={(event) => updateSourceText(event.target.value)}
-                onSelect={captureTextareaSelection}
-                onKeyDown={captureSelectionOnEnter}
-                placeholder="Type a word, phrase, or sentence…"
-              />
-              <button type="button" className="floating-speak-button" onClick={() => speakText(sourceText, speechLanguage(sourceLanguage, sourceText))} aria-label="Speak source text" title="Speak source text">◖))</button>
-            </div>
-            <div className="floating-translation-pane is-output">
-              <textarea
-                aria-label="Translation"
-                value={translatedText}
-                readOnly
-                onSelect={captureTextareaSelection}
-                onKeyDown={captureSelectionOnEnter}
-                placeholder={translationState === "working" ? "Translating…" : "Translation appears here"}
-              />
-              <button type="button" className="floating-speak-button" onClick={() => speakText(translatedText, speechLanguageMap[targetLanguage])} aria-label="Speak translation" title="Speak translation">◖))</button>
-            </div>
+          <div className="floating-context-pane" data-language-tools-root>
+            <textarea
+              aria-label="Context text"
+              value={sourceText}
+              onChange={(event) => updateSourceText(event.target.value)}
+              onSelect={captureTextareaSelection}
+              onKeyDown={captureSelectionOnEnter}
+              placeholder="Paste or type a sentence for context…"
+            />
           </div>
-
-          <div className="floating-translation-footer">
-            <span className={`floating-translation-state is-${translationState}`} aria-live="polite">
-              {translationState === "working" ? "TRANSLATING…" : translationState === "ready" ? "TRANSLATED" : translationState === "error" ? "TRANSLATION PAUSED" : "READY"}
-            </span>
-            <button type="button" className="floating-translate-now" onClick={() => void translateContext("manual")} disabled={!sourceText.trim()}>Translate now</button>
-          </div>
-
           <div className="floating-speech-controls">
             <label>Speed
               <select value={speechRate} onChange={(event) => setSpeechRate(Number(event.target.value) as SpeechRate)}>
@@ -610,16 +476,17 @@ export function FloatingStudyWindow({
         </section>
 
         <section className="floating-step">
-          <div className="floating-step-heading"><strong>STEP 3 · ACTION</strong><span>Use a word, phrase, or full sentence</span></div>
+          <div className="floating-step-heading"><strong>STEP 3 · ACTION</strong><span>Choose what you want to know about the target</span></div>
           <div className="floating-tool-actions">
-            {(["define", "pronounce", "explain", "refine", "translate", "save"] as const).map((action) => (
+            {(["define", "pronounce", "relations", "usage", "translate", "save"] as const).map((action) => (
               <button
                 type="button"
                 key={action}
                 disabled={!!busyAction}
-                data-primary={action === "explain" ? "true" : "false"}
+                data-active={lastAction === action ? "true" : undefined}
+                aria-pressed={lastAction === action}
                 data-saved={action === "save" && selectionSaved ? "true" : undefined}
-                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Show real usage, patterns, and a natural example" : action === "translate" ? "Translate the target" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
+                title={action === "define" ? "Chinese meaning + concise English definition" : action === "pronounce" ? "Read the target aloud" : action === "relations" ? "Context-matched synonyms and antonyms" : action === "usage" ? "Show real usage, patterns, and a natural example" : action === "translate" ? "Translate only this word or short phrase" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
                 onClick={() => void act(action)}
               >
                 {busyAction === action ? (action === "save" ? "Saving…" : action === "translate" ? "Translating…" : "Working…") : action === "save" && selectionSaved ? "Undo" : actionLabels[action]}
@@ -639,7 +506,6 @@ export function FloatingStudyWindow({
               <button type="button" className="floating-result-speak" onClick={() => speakText(resultText || entry?.meanings[0]?.definition || "", resultLanguage)} aria-label="Speak result" title="Speak result">◖))</button>
             )}
           </div>
-          {entry && <p className="floating-dictionary-result"><strong>{entry.word} {entry.phonetic}</strong><br />{entry.meanings[0]?.definition}</p>}
           {resultText && <p className="floating-action-result">{resultText}</p>}
         </div>
 
