@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { requestAi } from "../lib/ai-client";
 import type { SourceLanguage, TargetLanguage, VocabularyCard } from "../lib/ai-contracts";
 import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
@@ -31,6 +31,9 @@ const sourceLanguages: Array<{ value: SourceLanguage; label: string }> = [
   { value: "ja", label: "日本語" },
   { value: "ko", label: "한국어" },
 ];
+const targetLanguages: Array<{ value: TargetLanguage; label: string }> = sourceLanguages.filter(
+  (language): language is { value: TargetLanguage; label: string } => language.value !== "auto",
+);
 const speechLanguageMap: Record<TargetLanguage, SpeechLanguage> = {
   en: "en-US",
   "zh-CN": "zh-CN",
@@ -44,6 +47,10 @@ function detectedTargetLanguage(text: string): TargetLanguage {
   if (detected === "ja-JP") return "ja";
   if (detected === "ko-KR") return "ko";
   return "en";
+}
+
+function alternateTargetLanguage(source: TargetLanguage): TargetLanguage {
+  return source === "en" ? "zh-CN" : "en";
 }
 
 export function FloatingStudyWindow({
@@ -63,7 +70,10 @@ export function FloatingStudyWindow({
   const [launcherPosition, setLauncherPosition] = useState({ x: 10, y: 120 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [sourceLanguage, setSourceLanguage] = useState<SourceLanguage>("auto");
+  const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>("zh-CN");
   const [sourceText, setSourceText] = useState(initialText);
+  const [translatedText, setTranslatedText] = useState("");
+  const [translationState, setTranslationState] = useState<"idle" | "working" | "ready" | "error">("idle");
   const [selection, setSelection] = useState("");
   const [selectionSaved, setSelectionSaved] = useState(false);
   const [spellingSuggestion, setSpellingSuggestion] = useState<string | null>(null);
@@ -81,10 +91,18 @@ export function FloatingStudyWindow({
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
   const saveCheckSequence = useRef(0);
   const suggestionSequence = useRef(0);
+  const translationTimer = useRef<number | null>(null);
+  const translationAbort = useRef<AbortController | null>(null);
+  const translationCache = useRef(new Map<string, string>());
+  const translationSequence = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      translationAbort.current?.abort();
+      translationSequence.current += 1;
       setSourceText(initialText);
+      setTranslatedText("");
+      setTranslationState("idle");
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activityId, initialText]);
@@ -147,11 +165,99 @@ export function FloatingStudyWindow({
 
   useEffect(() => () => {
     if (launcherTimer.current != null) window.clearTimeout(launcherTimer.current);
+    if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
+    translationAbort.current?.abort();
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
+  useEffect(() => {
+    const text = sourceText.trim();
+    const effectiveSource = sourceLanguage === "auto" ? detectedTargetLanguage(text) : sourceLanguage;
+    if (!text && sourceLanguage === "auto") return;
+    if (effectiveSource !== targetLanguage) return;
+    setTargetLanguage(alternateTargetLanguage(effectiveSource));
+  }, [sourceLanguage, sourceText, targetLanguage]);
+
+  const translateContext = useCallback(async (trigger: "auto" | "manual") => {
+    if (trigger === "manual" && translationTimer.current != null) {
+      window.clearTimeout(translationTimer.current);
+      translationTimer.current = null;
+    }
+
+    const text = sourceText.trim();
+    if (!text) {
+      translationSequence.current += 1;
+      setTranslatedText("");
+      setTranslationState("idle");
+      return;
+    }
+
+    const requestId = ++translationSequence.current;
+    const requestKey = `${sourceLanguage}|${targetLanguage}|${text}`;
+    const cached = translationCache.current.get(requestKey);
+    if (cached) {
+      setTranslatedText(cached);
+      setTranslationState("ready");
+      return;
+    }
+
+    translationAbort.current?.abort();
+    const controller = new AbortController();
+    translationAbort.current = controller;
+    setTranslationState("working");
+
+    const result = await requestAi<{ text: string }>({
+      capability: "context-translate",
+      selection: text.slice(0, 8_000),
+      context: trigger === "auto" ? "Live sentence translation in the Context panel." : "User-confirmed sentence translation in the Context panel.",
+      sourceLanguage,
+      targetLanguage,
+    }, { timeoutMs: 9_000, signal: controller.signal });
+
+    if (controller.signal.aborted || requestId !== translationSequence.current) return;
+    if (!result.ok) {
+      setTranslationState("error");
+      setMessage(trigger === "manual" ? result.message : "Sentence translation paused. Tap Translate now to retry.");
+      return;
+    }
+
+    translationCache.current.set(requestKey, result.data.text);
+    setTranslatedText(result.data.text);
+    setTranslationState("ready");
+  }, [sourceLanguage, sourceText, targetLanguage]);
+
+  useEffect(() => {
+    if (!open || !sourceText.trim()) return;
+    translationTimer.current = window.setTimeout(() => {
+      translationTimer.current = null;
+      void translateContext("auto");
+    }, 450);
+    return () => {
+      if (translationTimer.current != null) window.clearTimeout(translationTimer.current);
+      translationTimer.current = null;
+    };
+  }, [open, sourceText, sourceLanguage, targetLanguage, translateContext]);
+
   function updateSourceText(value: string) {
     setSourceText(value);
+    if (!value.trim()) {
+      translationSequence.current += 1;
+      setTranslatedText("");
+      setTranslationState("idle");
+    } else {
+      setTranslationState("idle");
+    }
+  }
+
+  function swapLanguages() {
+    const resolvedSource = sourceLanguage === "auto" ? detectedTargetLanguage(sourceText) : sourceLanguage;
+    translationAbort.current?.abort();
+    translationSequence.current += 1;
+    setSourceLanguage(targetLanguage);
+    setTargetLanguage(resolvedSource);
+    setSourceText(translatedText);
+    setTranslatedText(sourceText);
+    setTranslationState(sourceText.trim() ? "ready" : "idle");
   }
 
   function toggleStudyWindow() {
@@ -446,26 +552,58 @@ export function FloatingStudyWindow({
         </div>
 
         <section className="floating-step floating-context-step">
-          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT</strong><span>Paste a sentence, then highlight a word or phrase</span></div>
-          <div className="floating-context-toolbar">
+          <div className="floating-step-heading"><strong>STEP 1 · CONTEXT TRANSLATION</strong><span>Translate the sentence, then highlight a word or phrase</span></div>
+
+          <div className="floating-language-bar">
             <label>
-              <span>Language</span>
-              <select value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value as SourceLanguage)}>
-                {sourceLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+              <select aria-label="Source language" value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value as SourceLanguage)}>
+                {sourceLanguages.map((language) => (
+                  <option key={language.value} value={language.value}>
+                    {language.value === "auto" && sourceText.trim() ? `AUTO · ${detectedTargetLanguage(sourceText).toUpperCase()}` : language.label}
+                  </option>
+                ))}
               </select>
             </label>
-            <button type="button" className="floating-context-speak" onClick={() => speakText(sourceText, speechLanguage(sourceLanguage, sourceText))} aria-label="Speak context" title="Speak context">◖))</button>
+            <button type="button" onClick={swapLanguages} aria-label="Swap languages" title="Swap languages">⇄</button>
+            <label>
+              <select aria-label="Target language" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value as TargetLanguage)}>
+                {targetLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+              </select>
+            </label>
           </div>
-          <div className="floating-context-pane" data-language-tools-root>
-            <textarea
-              aria-label="Context text"
-              value={sourceText}
-              onChange={(event) => updateSourceText(event.target.value)}
-              onSelect={captureTextareaSelection}
-              onKeyDown={captureSelectionOnEnter}
-              placeholder="Paste or type a sentence for context…"
-            />
+
+          <div className="subtitle-study-copy" data-language-tools-root>
+            <div className="floating-translation-pane">
+              <textarea
+                aria-label="Context source text"
+                value={sourceText}
+                onChange={(event) => updateSourceText(event.target.value)}
+                onSelect={captureTextareaSelection}
+                onKeyDown={captureSelectionOnEnter}
+                placeholder="Paste or type a sentence…"
+              />
+              <button type="button" className="floating-speak-button" onClick={() => speakText(sourceText, speechLanguage(sourceLanguage, sourceText))} aria-label="Speak source sentence" title="Speak source sentence">◖))</button>
+            </div>
+            <div className="floating-translation-pane is-output">
+              <textarea
+                aria-label="Context translation"
+                value={translatedText}
+                readOnly
+                placeholder={translationState === "working" ? "Translating…" : "Translation appears here"}
+              />
+              <button type="button" className="floating-speak-button" onClick={() => speakText(translatedText, speechLanguageMap[targetLanguage])} aria-label="Speak translated sentence" title="Speak translated sentence">◖))</button>
+            </div>
           </div>
+
+          <div className="floating-translation-footer">
+            <span className={`floating-translation-state is-${translationState}`}>
+              {translationState === "working" ? "TRANSLATING…" : translationState === "ready" ? "TRANSLATED" : translationState === "error" ? "TRANSLATION PAUSED" : "LIVE TRANSLATION"}
+            </span>
+            <button type="button" className="floating-translate-now" disabled={translationState === "working" || !sourceText.trim()} onClick={() => void translateContext("manual")}>
+              Translate now
+            </button>
+          </div>
+
           <div className="floating-speech-controls">
             <label>Speed
               <select value={speechRate} onChange={(event) => setSpeechRate(Number(event.target.value) as SpeechRate)}>
