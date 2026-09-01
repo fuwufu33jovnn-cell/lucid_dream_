@@ -89,8 +89,10 @@ export function FloatingStudyWindow({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      translationSequence.current += 1;
       setSourceText(initialText);
       setTranslatedText("");
+      setTranslationState("idle");
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activityId, initialText]);
@@ -274,10 +276,12 @@ export function FloatingStudyWindow({
 
   function swapLanguages() {
     const resolvedSource = sourceLanguage === "auto" ? detectedTargetLanguage(sourceText) : sourceLanguage;
+    translationSequence.current += 1;
     setSourceLanguage(targetLanguage);
     setTargetLanguage(resolvedSource);
     setSourceText(translatedText);
     setTranslatedText(sourceText);
+    setTranslationState(sourceText.trim() ? "ready" : "idle");
   }
 
   async function pronounceTarget(normalized: string) {
