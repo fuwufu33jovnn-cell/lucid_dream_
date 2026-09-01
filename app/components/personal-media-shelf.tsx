@@ -45,7 +45,7 @@ export function PersonalMediaShelf() {
       setSelected(record);
       setUrl("");
       setTitle("");
-      setStatus(existing ? "ALREADY HERE · MOVED TO RECENT" : "IMPORTED · SAVED ON THIS DEVICE");
+      setStatus(existing ? `ALREADY HERE · “${record.title}” MOVED TO RECENT` : `IMPORTED AS “${record.title}” · SAVED ON THIS DEVICE`);
     } catch {
       setStatus("EMBED READY · DEVICE SAVING UNAVAILABLE");
       setSelected(record);
@@ -62,7 +62,7 @@ export function PersonalMediaShelf() {
       </header>
       <div className="personal-media-importer">
         <label><span>PASTE YOUTUBE OR SPOTIFY LINK</span><input type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://…" /></label>
-        <label><span>YOUR LABEL / OPTIONAL</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Night listening, film notes…" /></label>
+        <label><span>CUSTOM SHELF NAME / OPTIONAL</span><input aria-label="Optional custom shelf name" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Shown in shelf, e.g. Night listening" /></label>
         <button type="button" onClick={() => void importMedia()}>IMPORT TO LAB ↗</button>
       </div>
       <div className="personal-media-body">
