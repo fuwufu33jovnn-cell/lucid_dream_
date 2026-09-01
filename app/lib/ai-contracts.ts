@@ -13,7 +13,8 @@ export type AiRequest =
   | { capability: "explain"; selection: string; context: string }
   | { capability: "refine"; selection: string; context: string }
   | { capability: "vocabulary-card"; selection: string; context: string; sourceLanguage?: SourceLanguage }
-  | { capability: "translate"; selection: string; context: string; sourceLanguage?: SourceLanguage; targetLanguage?: TargetLanguage };
+  | { capability: "translate"; selection: string; context: string; sourceLanguage?: SourceLanguage; targetLanguage?: TargetLanguage }
+  | { capability: "context-translate"; selection: string; context: string; sourceLanguage?: SourceLanguage; targetLanguage?: TargetLanguage };
 
 export type GeneratedPlan = { tasks: TodayTask[] };
 export type WritingFeedback = {

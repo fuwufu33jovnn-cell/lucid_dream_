@@ -23,10 +23,10 @@ export function parseGatewayRequest(input: unknown): ParseResult {
   } else if (capability === "define" || capability === "relations" || capability === "usage" || capability === "explain" || capability === "refine" || capability === "vocabulary-card") {
     if (typeof input.selection !== "string" || !input.selection.trim() || input.selection.length > 2_000 || typeof input.context !== "string" || input.context.length > 1_000) return { ok: false, message: `Invalid ${capability} request.` };
     if (capability === "vocabulary-card" && input.sourceLanguage !== undefined && !sourceLanguages.has(String(input.sourceLanguage))) return { ok: false, message: "Invalid vocabulary-card request." };
-  } else if (capability === "translate") {
-    if (typeof input.selection !== "string" || !input.selection.trim() || input.selection.length > 8_000 || typeof input.context !== "string" || input.context.length > 1_000) return { ok: false, message: "Invalid translate request." };
-    if (input.sourceLanguage !== undefined && !sourceLanguages.has(String(input.sourceLanguage))) return { ok: false, message: "Invalid translate request." };
-    if (input.targetLanguage !== undefined && !targetLanguages.has(String(input.targetLanguage))) return { ok: false, message: "Invalid translate request." };
+  } else if (capability === "translate" || capability === "context-translate") {
+    if (typeof input.selection !== "string" || !input.selection.trim() || input.selection.length > 8_000 || typeof input.context !== "string" || input.context.length > 1_000) return { ok: false, message: `Invalid ${capability} request.` };
+    if (input.sourceLanguage !== undefined && !sourceLanguages.has(String(input.sourceLanguage))) return { ok: false, message: `Invalid ${capability} request.` };
+    if (input.targetLanguage !== undefined && !targetLanguages.has(String(input.targetLanguage))) return { ok: false, message: `Invalid ${capability} request.` };
   } else return { ok: false, message: "Unknown capability." };
   return { ok: true, value: input };
 }

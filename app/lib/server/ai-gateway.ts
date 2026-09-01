@@ -110,6 +110,7 @@ function instructionsFor(capability: string): string {
   if (capability === "define") return "Define only the selected word or short phrase in the supplied context. Return exactly two concise lines in text: first line starts 中文： and gives the natural Simplified Chinese meaning; second line starts EN: and gives a learner-friendly English definition. Do not translate or explain the whole context sentence.";
   if (capability === "relations") return "For the selected word or short phrase, give sense-matched synonyms and antonyms for the supplied context. Return exactly two concise lines in text: Syn: followed by 2 to 4 useful synonyms, and Ant: followed by 1 to 3 real antonyms. If there is no natural antonym, write Ant: —. Do not invent loose or unrelated opposites.";
   if (capability === "usage") return "Teach how the selected word or short phrase is actually used. Return concise usage guidance in text with three short lines: Pattern: one common pattern or collocation; Example: one natural complete sentence using the item in the same sense as the context, allowing normal grammatical inflection; Use: one brief register or situation note in Simplified Chinese. Do not rewrite the whole context.";
+  if (capability === "context-translate") return "Translate the complete supplied sentence or passage accurately and naturally from sourceLanguage to targetLanguage. Detect the source language when sourceLanguage is auto. targetLanguage zh-CN means Simplified Chinese, en means English, ja means Japanese, and ko means Korean. Preserve names, tone, punctuation, and line breaks. Never omit content, never turn the request into vocabulary explanation, and never echo the source in the wrong language. Return only the full translation in the text field.";
   if (capability === "translate") return "Translate only the supplied selection, which should be a word or short phrase. The context is reference for choosing the correct sense only; never translate or paraphrase the whole context sentence. Detect the selection language when sourceLanguage is auto. targetLanguage zh-CN means Simplified Chinese, en means English, ja means Japanese, and ko means Korean. Never echo the source in the wrong language. Return only the translation in the text field.";
   if (capability === "refine") return "Teach how the selected word or phrase is actually used instead of rewriting it. Give a concise meaning-in-context, one common pattern or collocation, one natural complete example using the item, and a short register or situation note. Normal grammatical inflection is allowed. Return only this usage guidance in the text field.";
   return "Explain the selected English in simpler English using the supplied context.";
@@ -172,7 +173,7 @@ function validResult(capability: string, value: unknown, request: Record<string,
   if (capability === "writing-feedback") return validateWritingFeedback(value);
   if (capability === "speaking-feedback") return validateSpeakingFeedback(value);
   if (capability === "vocabulary-card") return validateVocabularyCardResponse(value, String(request.selection));
-  if (capability === "translate") return validTranslationResult(value, request);
+  if (capability === "translate" || capability === "context-translate") return validTranslationResult(value, request);
   return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).text === "string" && Boolean(String((value as Record<string, unknown>).text).trim());
 }
 
@@ -226,7 +227,7 @@ async function callProvider(provider: Provider, key: string, request: Record<str
   }
 
   try {
-    const timeoutMs = capability === "translate" ? TRANSLATE_PROVIDER_TIMEOUT_MS : PROVIDER_TIMEOUT_MS;
+    const timeoutMs = capability === "translate" || capability === "context-translate" ? TRANSLATE_PROVIDER_TIMEOUT_MS : PROVIDER_TIMEOUT_MS;
     const response = await fetchWithTimeout(fetcher, url, init, timeoutMs);
     if (!response.ok) {
       console.warn("[ai] provider request failed", { provider, capability, status: response.status });
