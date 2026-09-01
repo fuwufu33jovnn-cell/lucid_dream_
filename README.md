@@ -4,9 +4,9 @@
 
 The site works without AI. Dictionary lookup, fixed daily plans, drafts, transcripts, and saved vocabulary remain device-local. When no provider key is configured, the interface deliberately displays `AI NOT CONNECTED`.
 
-Browser requests go only to the same-origin server route at `/api/ai`. Configure one or more server secrets: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, and `ARK_API_KEY` (Doubao / Volcano Ark). Never place real values in a public `.env` file, a `NEXT_PUBLIC_*` variable, or the browser bundle. Doubao uses the official Ark endpoint and reads `DOUBAO_MODEL` (default `doubao-seed-2-1-pro-260628`).
+Browser requests go only to the same-origin server route at `/api/ai`. Configure one or more server secrets: `QWEN_API_KEY`, `MISTRAL_API_KEY`, `SILICONFLOW_API_KEY`, `ARK_API_KEY` (Doubao / Volcano Ark), `KIMI_API_KEY`, `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, and `OPENAI_API_KEY`. Never place real values in a public `.env` file, a `NEXT_PUBLIC_*` variable, or the browser bundle. Doubao uses the official Ark endpoint and reads `DOUBAO_MODEL` (default `doubao-seed-2-1-pro-260628`).
 
-The gateway tries Gemini first, then OpenAI, then DeepSeek, then Doubao. It requests structured JSON, validates every result against the capability contract, limits payloads, and gives each provider a bounded timeout before falling back. Speaking feedback is transcript-only in this phase and therefore never returns a pronunciation assessment.
+The gateway uses this subtitle-first fallback order: Qwen, Mistral, SiliconFlow, Doubao, Kimi, DeepSeek, Gemini, then OpenAI. It requests structured JSON, validates every result against the capability contract, limits payloads, and gives each provider a bounded timeout before falling back. Speaking feedback is transcript-only in this phase and therefore never returns a pronunciation assessment.
 
 ## Runtime foundation
 
