@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestAi } from "../lib/ai-client";
 import type { VocabularyCard } from "../lib/ai-contracts";
 import { summarizeActivityProgress } from "../lib/editorial";
@@ -49,6 +49,8 @@ export function ArchiveBoard() {
   const [hiddenChinese, setHiddenChinese] = useState<Set<string>>(() => new Set());
   const [openUsage, setOpenUsage] = useState<Set<string>>(() => new Set());
   const [repairingVocabulary, setRepairingVocabulary] = useState<Set<string>>(() => new Set());
+  const [removingVocabulary, setRemovingVocabulary] = useState<Set<string>>(() => new Set());
+  const removedVocabularyIds = useRef<Set<string>>(new Set());
   const [state, setState] = useState("Reading this device…");
 
   useEffect(() => {
@@ -87,7 +89,7 @@ export function ArchiveBoard() {
       setState(`Loading meanings and examples for ${incomplete.length} older ${incomplete.length === 1 ? "entry" : "entries"}…`);
       setRepairingVocabulary(new Set(incomplete.map((record) => record.id)));
       const repairedRecords = (await Promise.all(incomplete.map(fetchVocabularyDetails)))
-        .filter((record): record is VocabularyRecord => record !== null);
+        .filter((record): record is VocabularyRecord => record !== null && !removedVocabularyIds.current.has(record.id));
       await Promise.all(repairedRecords.map((record) => putRecord<VocabularyRecord>("vocabulary", record)));
       if (!active) return;
       const repairedById = new Map(repairedRecords.map((record) => [record.id, record]));
@@ -130,7 +132,7 @@ export function ArchiveBoard() {
     setRepairingVocabulary((current) => new Set(current).add(item.id));
     try {
       const completed = await fetchVocabularyDetails(item);
-      if (completed) {
+      if (completed && !removedVocabularyIds.current.has(item.id)) {
         await putRecord<VocabularyRecord>("vocabulary", completed);
         setVocabulary((current) => current.map((record) => record.id === completed.id ? completed : record));
         setState(`Added checked meanings and an example for “${item.selection}”`);
@@ -141,6 +143,41 @@ export function ArchiveBoard() {
       setState(`Could not update “${item.selection}” on this device · retry later`);
     } finally {
       setRepairingVocabulary((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  }
+
+  async function removeVocabulary(item: VocabularyRecord) {
+    removedVocabularyIds.current.add(item.id);
+    setRemovingVocabulary((current) => new Set(current).add(item.id));
+    try {
+      await deleteRecord("vocabulary", item.id);
+      setVocabulary((current) => current.filter((record) => record.id !== item.id));
+      setSummary((current) => ({ ...current, phrases: Math.max(0, current.phrases - 1) }));
+      setHiddenChinese((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      setOpenUsage((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      setRepairingVocabulary((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      setState(`Removed “${item.selection}” from your vocabulary shelf`);
+    } catch {
+      removedVocabularyIds.current.delete(item.id);
+      setState(`Could not remove “${item.selection}” on this device · retry`);
+    } finally {
+      setRemovingVocabulary((current) => {
         const next = new Set(current);
         next.delete(item.id);
         return next;
@@ -197,6 +234,7 @@ export function ArchiveBoard() {
               const usageOpen = openUsage.has(item.id);
               const detailsReady = hasCompleteVocabularyDetails(item);
               const repairing = repairingVocabulary.has(item.id);
+              const removing = removingVocabulary.has(item.id);
               const usageExample = vocabularyUsageExample(item);
               return (
                 <article className="vocabulary-shelf-item" key={item.id}>
@@ -225,7 +263,8 @@ export function ArchiveBoard() {
                     {detailsReady
                       ? <button type="button" onClick={() => toggleChinese(item.id)}>{chineseHidden ? "SHOW 中文" : "HIDE 中文"}</button>
                       : <button type="button" disabled={repairing} onClick={() => void retryVocabularyDetails(item)}>{repairing ? "LOADING…" : "RETRY DETAILS"}</button>}
-                    <button type="button" disabled={!usageExample} onClick={() => toggleUsage(item.id)} aria-expanded={usageOpen}>{usageOpen ? "CLOSE USE" : "USE"}</button>
+                    <button type="button" disabled={!usageExample || removing} onClick={() => toggleUsage(item.id)} aria-expanded={usageOpen}>{usageOpen ? "CLOSE USE" : "USE"}</button>
+                    <button type="button" disabled={removing} onClick={() => void removeVocabulary(item)}>{removing ? "REMOVING…" : "UNSAVE"}</button>
                   </div>
 
                   {usageOpen && usageExample && (
