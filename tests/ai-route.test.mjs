@@ -10,11 +10,15 @@ const explainRequest = () => new Request("https://lucid.example/api/ai", {
 
 test("AI gateway status reports configured providers without exposing keys", () => {
   assert.deepEqual(getConfiguredProviders({
+    QWEN_API_KEY: "qwen-secret",
+    MISTRAL_API_KEY: "mistral-secret",
+    SILICONFLOW_API_KEY: "silicon-secret",
+    ARK_API_KEY: "doubao-secret",
+    KIMI_API_KEY: "kimi-secret",
+    DEEPSEEK_API_KEY: "deepseek-secret",
     GEMINI_API_KEY: "gemini-secret",
     OPENAI_API_KEY: "  ",
-    DEEPSEEK_API_KEY: "deepseek-secret",
-    ARK_API_KEY: "doubao-secret",
-  }), ["gemini", "deepseek", "doubao"]);
+  }), ["qwen", "mistral", "siliconflow", "doubao", "kimi", "deepseek", "gemini"]);
 });
 
 test("AI gateway rejects malformed capability payloads before calling a provider", async () => {
@@ -226,4 +230,42 @@ test("vocabulary cards accept normal grammatical inflection in examples", async 
   assert.equal(response.status, 200);
   assert.equal(calls, 1);
   assert.deepEqual(await response.json(), card);
+});
+
+
+test("AI gateway uses Qwen as the first configured subtitle-friendly provider", async () => {
+  const urls = [];
+  const handler = createAiHandler({
+    env: {
+      QWEN_API_KEY: "qwen-test",
+      MISTRAL_API_KEY: "mistral-test",
+    },
+    fetch: async (url, init) => {
+      urls.push(String(url));
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      assert.equal(body.model, "qwen-plus");
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ text: "千问结果" }) } }] });
+    },
+  });
+
+  const response = await handler(explainRequest());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-lucid-ai-provider"), "qwen");
+  assert.match(urls[0], /dashscope\.aliyuncs\.com/);
+  assert.deepEqual(await response.json(), { text: "千问结果" });
+});
+
+test("SiliconFlow Qwen3 requests disable thinking", async () => {
+  let body;
+  const handler = createAiHandler({
+    env: { SILICONFLOW_API_KEY: "silicon-test", SILICONFLOW_MODEL: "Qwen/Qwen3-8B" },
+    fetch: async (_url, init) => {
+      body = JSON.parse(String(init?.body ?? "{}"));
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ text: "ok" }) } }] });
+    },
+  });
+
+  const response = await handler(explainRequest());
+  assert.equal(response.status, 200);
+  assert.equal(body.enable_thinking, false);
 });
