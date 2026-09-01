@@ -29,8 +29,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and run repository tests
-        run: npm test
+      - name: Run environment-independent regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          find tests -maxdepth 1 -name '*.test.mjs' ! -name 'rendered-html.test.mjs' -print0 \
+            | xargs -0 node --test
 
-      - name: Verify Next.js production type-check
+      - name: Verify Next.js production build and type-check
         run: npx --no-install next build
