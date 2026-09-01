@@ -40,6 +40,8 @@ test("dictionary route offers a conservative Google-style spelling suggestion", 
   const client = await readFile(new URL("../app/lib/language-tools.ts", import.meta.url), "utf8");
   assert.match(route, /searchParams\.get\("suggest"\)/);
   assert.match(route, /suggestDatamuseWord/);
+  assert.match(route, /api\.datamuse\.com\/sug/);
+  assert.match(route, /candidate\.toLocaleLowerCase\("en-US"\) !== normalized/);
   assert.match(route, /editDistance/);
   assert.match(route, /maxDistance = word\.length <= 5 \? 1 : 2/);
   assert.match(client, /suggestDictionaryWord/);
