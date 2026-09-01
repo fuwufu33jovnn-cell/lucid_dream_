@@ -5,14 +5,17 @@ import test from "node:test";
 const componentUrl = new URL("../app/components/floating-study-window.tsx", import.meta.url);
 const cssUrl = new URL("../app/floating-study-window-overrides.css", import.meta.url);
 
-test("context is a single source box, not a sentence translation module", async () => {
+test("Context keeps the two-pane sentence translator while vocabulary Translate stays separate", async () => {
   const source = await readFile(componentUrl, "utf8");
-  assert.match(source, /STEP 1 · CONTEXT/);
-  assert.match(source, /aria-label="Context text"/);
-  assert.match(source, /Paste a sentence, then highlight a word or phrase/);
-  assert.doesNotMatch(source, /translateContext/);
-  assert.doesNotMatch(source, /translatedText/);
-  assert.doesNotMatch(source, />Translate now</);
+  assert.match(source, /STEP 1 · CONTEXT TRANSLATION/);
+  assert.match(source, /aria-label="Context source text"/);
+  assert.match(source, /aria-label="Context translation"/);
+  assert.match(source, /capability: "context-translate"/);
+  assert.match(source, /translateContext/);
+  assert.match(source, /translatedText/);
+  assert.match(source, />Translate now</);
+  assert.match(source, /capability: "translate"/);
+  assert.match(source, /Translate is for a word or short phrase/);
 });
 
 test("highlighted context text becomes the target without deleting the source", async () => {
