@@ -29,5 +29,5 @@ jobs:
           vocabulary_response="$(curl --location --fail-with-body --silent --show-error --max-time 45 \
             -X POST "https://lucid-dream-nu.vercel.app/api/ai" \
             -H "content-type: application/json" \
-            --data '{"capability":"vocabulary-card","selection":"make sense","context":"The ending finally makes sense.","sourceLanguage":"en"}')"
+            --data '{"capability":"vocabulary-card","selection":"makes sense","context":"The ending finally makes sense.","sourceLanguage":"en"}')"
           node -e 'const body=JSON.parse(process.argv[1]); for(const key of ["chineseMeaning","englishDefinition","pronunciation","example"]){ if(typeof body[key]!=="string"||!body[key].trim()){console.error("Unexpected vocabulary response:", body); process.exit(1)} } console.log("Vocabulary-card smoke test passed.")' "$vocabulary_response"
