@@ -103,7 +103,11 @@ export async function GET(request: Request): Promise<Response> {
       return Response.json({ error: "single-english-word-required" }, { status: 400 });
     }
     try {
-      const suggestion = await suggestDatamuseWord(suggestionInput);
+      const [knownWord, suggestion] = await Promise.all([
+        lookupFreeDictionary(suggestionInput).catch(() => null),
+        suggestDatamuseWord(suggestionInput).catch(() => null),
+      ]);
+      if (knownWord) return Response.json({ error: "not-found" }, { status: 404 });
       return suggestion
         ? Response.json({ suggestion }, { headers: { "cache-control": "public, max-age=300, s-maxage=86400" } })
         : Response.json({ error: "not-found" }, { status: 404 });
