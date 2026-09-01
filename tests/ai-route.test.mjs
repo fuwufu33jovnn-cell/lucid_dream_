@@ -13,7 +13,8 @@ test("AI gateway status reports configured providers without exposing keys", () 
     GEMINI_API_KEY: "gemini-secret",
     OPENAI_API_KEY: "  ",
     DEEPSEEK_API_KEY: "deepseek-secret",
-  }), ["gemini", "deepseek"]);
+    ARK_API_KEY: "doubao-secret",
+  }), ["gemini", "deepseek", "doubao"]);
 });
 
 test("AI gateway rejects malformed capability payloads before calling a provider", async () => {
@@ -144,4 +145,23 @@ test("AI gateway blocks cross-site browser posts before provider calls", async (
 
   assert.equal(response.status, 403);
   assert.equal(providerCalls, 0);
+});
+
+
+test("AI gateway can call Doubao through Volcano Ark", async () => {
+  let body;
+  const handler = createAiHandler({
+    env: { ARK_API_KEY: "ark-test", DOUBAO_MODEL: "doubao-seed-2-1-pro-260628" },
+    fetch: async (url, init) => {
+      assert.match(String(url), /ark\.cn-beijing\.volces\.com\/api\/v3\/chat\/completions/);
+      body = JSON.parse(String(init?.body ?? "{}"));
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ text: "豆包结果" }) } }] });
+    },
+  });
+
+  const response = await handler(explainRequest());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-lucid-ai-provider"), "doubao");
+  assert.equal(body.model, "doubao-seed-2-1-pro-260628");
+  assert.deepEqual(await response.json(), { text: "豆包结果" });
 });
