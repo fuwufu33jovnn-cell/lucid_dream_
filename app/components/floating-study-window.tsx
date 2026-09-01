@@ -7,7 +7,7 @@ import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
 import type { VocabularyRecord } from "../lib/models";
 import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../lib/language-tools";
 import { detectSpeechLanguage, pickNaturalVoice, type SpeechLanguage, type VoiceGender } from "../lib/pronunciation";
-import { normalizeVocabularyKey, sameVocabularySelection, vocabularyRecordId } from "../lib/vocabulary";
+import { completeVocabularyRecord, normalizeVocabularyKey, sameVocabularySelection, vocabularyRecordId } from "../lib/vocabulary";
 import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
 
 type StudyAction = "define" | "pronounce" | "explain" | "refine" | "translate" | "save";
@@ -341,7 +341,7 @@ export function FloatingStudyWindow({
 
           let dictionary: DictionaryEntry | null = null;
           const language = speechLanguage(sourceLanguage, normalized);
-          if (language === "en-US" && !/\\s/u.test(normalized)) {
+          if (language === "en-US" && !/\s/u.test(normalized)) {
             try { dictionary = await lookupDictionary(normalized); } catch { dictionary = null; }
           }
 
@@ -351,27 +351,28 @@ export function FloatingStudyWindow({
             context: sourceText.slice(0, 1_000),
             sourceLanguage,
           });
-          const card = cardResult.ok ? cardResult.data : null;
           const savedAt = Date.now();
-          await putRecord<VocabularyRecord>("vocabulary", {
+          const completeRecord = completeVocabularyRecord({
             id: vocabularyRecordId(normalized),
             selection: normalized,
             normalizedSelection: normalizeVocabularyKey(normalized),
             sourceActivityId: activityId,
             sourceTitle: title,
             context: sourceText.slice(0, 600),
-            pronunciation: dictionary?.phonetic || card?.pronunciation || "",
-            audioUrl: dictionary?.audioUrl || "",
-            chineseMeaning: card?.chineseMeaning || "",
-            englishDefinition: dictionary?.meanings[0]?.definition || card?.englishDefinition || "",
-            example: card?.example || "",
             createdAt: savedAt,
             savedAt,
-          });
+          }, cardResult.ok ? cardResult.data : null, dictionary);
+          if (!completeRecord) {
+            setMessage(cardResult.ok && cardResult.data.validSelection === false
+              ? `“${normalized}” looks like an incomplete or mistaken selection${cardResult.data.suggestedCorrection ? `; try “${cardResult.data.suggestedCorrection}”` : ""}. It was not saved.`
+              : cardResult.ok
+                ? `“${normalized}” did not produce a trustworthy complete card, so it was not saved. Check the selection and try again.`
+              : `${cardResult.message} “${normalized}” was not saved as an empty card.`);
+            return;
+          }
+          await putRecord<VocabularyRecord>("vocabulary", completeRecord);
           setSelectionSaved(true);
-          setMessage(card
-            ? `Saved “${normalized}” with pronunciation, meanings, and an example.`
-            : `Saved “${normalized}”. Extra AI details were unavailable this time.`);
+          setMessage(`Saved “${normalized}” with pronunciation, Chinese meaning, English explanation, and a checked example.`);
         } catch {
           setMessage("Saving is unavailable in this browser.");
         }

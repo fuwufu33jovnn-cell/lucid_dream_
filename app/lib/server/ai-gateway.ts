@@ -1,4 +1,4 @@
-import { validateGeneratedPlan, validateSpeakingFeedback, validateVocabularyCard, validateWritingFeedback } from "../ai-contracts.ts";
+import { validateGeneratedPlan, validateSpeakingFeedback, validateVocabularyCardResponse, validateWritingFeedback } from "../ai-contracts.ts";
 import { parseGatewayRequest } from "../../../supabase/functions/_shared/ai-contracts.ts";
 
 type GatewayEnv = Record<string, string | undefined>;
@@ -83,7 +83,10 @@ function schemaFor(capability: string): Record<string, unknown> {
     },
   };
   if (capability === "vocabulary-card") return {
-    type: "object", additionalProperties: false, required: ["chineseMeaning", "englishDefinition", "pronunciation", "example"], properties: {
+    type: "object", additionalProperties: false, required: ["selection", "validSelection", "suggestedCorrection", "chineseMeaning", "englishDefinition", "pronunciation", "example"], properties: {
+      selection: { type: "string" },
+      validSelection: { type: "boolean" },
+      suggestedCorrection: { type: ["string", "null"] },
       chineseMeaning: { type: "string" },
       englishDefinition: { type: "string" },
       pronunciation: { type: "string" },
@@ -97,7 +100,7 @@ function instructionsFor(capability: string): string {
   if (capability === "daily-plan") return "Create a practical English plan whose task minutes sum exactly to the requested budget. Use only local routes. Keep tasks concrete and concise.";
   if (capability === "writing-feedback") return "Give concise, supportive, unofficial IELTS-style or work-English feedback. Preserve the writer's meaning. Never claim an official score. Prioritize a few teachable corrections.";
   if (capability === "speaking-feedback") return "Review only the transcript for fluency, clarity, vocabulary, and grammar. Audio was not analyzed, so pronunciation must be null and audioAnalyzed false.";
-  if (capability === "vocabulary-card") return "Create one compact learner vocabulary card for the exact selected word or phrase. chineseMeaning must be a concise natural Simplified Chinese meaning. englishDefinition must be a concise learner-friendly English explanation. pronunciation must give useful pronunciation notation: IPA for English, pinyin for Chinese, Hepburn romanization for Japanese, or Revised Romanization for Korean. example must be one natural complete sentence showing the selected item in the same sense as the supplied context. Do not alter the selected lexical identity.";
+  if (capability === "vocabulary-card") return "Check whether the exact selection is a valid word or phrase in the supplied context, then create one accurate learner card. Always copy the user's selection verbatim into selection. If it looks truncated, accidentally merged, misspelled, or unrelated to the context, set validSelection false, put the likely intended text in suggestedCorrection, and return empty strings for chineseMeaning, englishDefinition, pronunciation, and example. Otherwise set validSelection true and suggestedCorrection null. Never repair, replace, or reinterpret a valid selected item. chineseMeaning must be concise natural Simplified Chinese; englishDefinition must be learner-friendly English; pronunciation must be IPA for English, pinyin for Chinese, Hepburn romanization for Japanese, or Revised Romanization for Korean. example must be one natural complete sentence that contains the exact selection verbatim and uses it in the same sense as the context. Do not return unrelated source text as an example.";
   if (capability === "translate") return "Translate the supplied text accurately and naturally from sourceLanguage to targetLanguage. Detect the source language when sourceLanguage is auto. Preserve tone, names, line breaks, and intended meaning. Return only the translation in the text field.";
   if (capability === "refine") return "Rewrite the selected text so it sounds natural and polished while preserving its language, meaning, tone, and level of formality. Return only the refined version in the text field.";
   return "Explain the selected English in simpler English using the supplied context.";
@@ -135,7 +138,7 @@ function validResult(capability: string, value: unknown, request: Record<string,
   if (capability === "daily-plan") return validateGeneratedPlan(value, Number(request.minutes) as 10 | 45 | 90);
   if (capability === "writing-feedback") return validateWritingFeedback(value);
   if (capability === "speaking-feedback") return validateSpeakingFeedback(value);
-  if (capability === "vocabulary-card") return validateVocabularyCard(value);
+  if (capability === "vocabulary-card") return validateVocabularyCardResponse(value, String(request.selection));
   return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).text === "string" && Boolean(String((value as Record<string, unknown>).text).trim());
 }
 
