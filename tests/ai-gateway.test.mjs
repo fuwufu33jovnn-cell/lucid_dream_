@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { validateVocabularyCard } from "../app/lib/ai-contracts.ts";
 import { corsHeaders, parseGatewayRequest } from "../supabase/functions/_shared/ai-contracts.ts";
@@ -86,4 +87,13 @@ test("gateway exposes narrowly scoped CORS headers", () => {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   });
+});
+
+
+test("gateway validates target-language output and turns refine into usage guidance", async () => {
+  const source = await readFile(new URL("../app/lib/server/ai-gateway.ts", import.meta.url), "utf8");
+  assert.match(source, /validTranslationResult/);
+  assert.match(source, /target === "zh-CN"/);
+  assert.match(source, /Never echo the source in the wrong language/);
+  assert.match(source, /Teach how the selected word or phrase is actually used/);
 });
