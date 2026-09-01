@@ -20,8 +20,9 @@ export function parseGatewayRequest(input: unknown): ParseResult {
     if (typeof input.prompt !== "string" || typeof input.response !== "string" || !input.response.trim() || input.response.length > 12_000 || !["ielts", "work", "general"].includes(String(input.taskType))) return { ok: false, message: "Invalid writing-feedback request." };
   } else if (capability === "speaking-feedback") {
     if (typeof input.prompt !== "string" || typeof input.transcript !== "string" || !input.transcript.trim() || input.transcript.length > 20_000 || input.audioAnalyzed !== false) return { ok: false, message: "Invalid speaking-feedback request." };
-  } else if (capability === "explain" || capability === "refine") {
+  } else if (capability === "explain" || capability === "refine" || capability === "vocabulary-card") {
     if (typeof input.selection !== "string" || !input.selection.trim() || input.selection.length > 2_000 || typeof input.context !== "string" || input.context.length > 1_000) return { ok: false, message: `Invalid ${capability} request.` };
+    if (capability === "vocabulary-card" && input.sourceLanguage !== undefined && !sourceLanguages.has(String(input.sourceLanguage))) return { ok: false, message: "Invalid vocabulary-card request." };
   } else if (capability === "translate") {
     if (typeof input.selection !== "string" || !input.selection.trim() || input.selection.length > 8_000 || typeof input.context !== "string" || input.context.length > 1_000) return { ok: false, message: "Invalid translate request." };
     if (input.sourceLanguage !== undefined && !sourceLanguages.has(String(input.sourceLanguage))) return { ok: false, message: "Invalid translate request." };
