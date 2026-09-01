@@ -191,10 +191,6 @@ async function callProvider(provider: Provider, key: string, request: Record<str
       value = JSON.parse(text);
     } catch {
       console.warn("[ai] provider returned invalid JSON", { provider, capability });
-      if (provider === "gemini" && capability === "vocabulary-card" && attempt === 0) {
-        console.info("[ai] retrying vocabulary card after malformed output", { provider });
-        return callProvider(provider, key, request, env, fetcher, attempt + 1);
-      }
       return null;
     }
 
