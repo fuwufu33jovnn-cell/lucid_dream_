@@ -33,3 +33,15 @@ test("dictionary route keeps a fast secondary lexical source while Define uses t
   assert.match(source, /action === "pronounce"[\s\S]*pronounceTarget\(normalized\)/);
   assert.match(source, /async function pronounceTarget[\s\S]*speakText\(normalized, language\)/);
 });
+
+
+test("dictionary route offers a conservative Google-style spelling suggestion", async () => {
+  const route = await readFile(new URL("../app/api/dictionary/route.ts", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/lib/language-tools.ts", import.meta.url), "utf8");
+  assert.match(route, /searchParams\.get\("suggest"\)/);
+  assert.match(route, /suggestDatamuseWord/);
+  assert.match(route, /editDistance/);
+  assert.match(route, /maxDistance = word\.length <= 5 \? 1 : 2/);
+  assert.match(client, /suggestDictionaryWord/);
+  assert.match(client, /\/api\/dictionary\?suggest=/);
+});
