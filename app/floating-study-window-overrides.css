@@ -47,8 +47,11 @@
 .floating-study-handle strong { margin-top: 1px; font-size: 14px; }
 
 .floating-window-controls {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 .floating-window-controls button {
   display: grid;
