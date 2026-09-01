@@ -11,7 +11,7 @@ type HandlerDependencies = {
 };
 
 const MAX_REQUEST_BYTES = 65_536;
-const PROVIDER_TIMEOUT_MS = 15_000;
+const PROVIDER_TIMEOUT_MS = 7_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 
@@ -101,8 +101,8 @@ function instructionsFor(capability: string): string {
   if (capability === "writing-feedback") return "Give concise, supportive, unofficial IELTS-style or work-English feedback. Preserve the writer's meaning. Never claim an official score. Prioritize a few teachable corrections.";
   if (capability === "speaking-feedback") return "Review only the transcript for fluency, clarity, vocabulary, and grammar. Audio was not analyzed, so pronunciation must be null and audioAnalyzed false.";
   if (capability === "vocabulary-card") return "Check whether the exact selection is a valid word or phrase in the supplied context, then create one accurate learner card. Always copy the user's selection verbatim into selection. If it looks truncated, accidentally merged, misspelled, or unrelated to the context, set validSelection false, put the likely intended text in suggestedCorrection, and return empty strings for chineseMeaning, englishDefinition, pronunciation, and example. Otherwise set validSelection true and suggestedCorrection null. Never repair, replace, or reinterpret a valid selected item. chineseMeaning must be concise natural Simplified Chinese; englishDefinition must be learner-friendly English; pronunciation must be IPA for English, pinyin for Chinese, Hepburn romanization for Japanese, or Revised Romanization for Korean. example must be one natural complete sentence that contains the exact selection verbatim and uses it in the same sense as the context. Do not return unrelated source text as an example.";
-  if (capability === "translate") return "Translate the supplied text accurately and naturally from sourceLanguage to targetLanguage. Detect the source language when sourceLanguage is auto. Preserve tone, names, line breaks, and intended meaning. Return only the translation in the text field.";
-  if (capability === "refine") return "Rewrite the selected text so it sounds natural and polished while preserving its language, meaning, tone, and level of formality. Return only the refined version in the text field.";
+  if (capability === "translate") return "Translate the supplied text accurately and naturally from sourceLanguage to targetLanguage. Detect the source language when sourceLanguage is auto. targetLanguage zh-CN means Simplified Chinese, en means English, ja means Japanese, and ko means Korean. Preserve tone, names, line breaks, and intended meaning. Never echo the source in the wrong language. Return only the translation in the text field.";
+  if (capability === "refine") return "Teach how the selected word or phrase is actually used instead of rewriting it. Give a concise meaning-in-context, one common pattern or collocation, one natural complete example containing the exact selection, and a short register or situation note. Keep examples in the selection language; use concise Simplified Chinese for explanation when helpful. Return only this usage guidance in the text field.";
   return "Explain the selected English in simpler English using the supplied context.";
 }
 
@@ -134,11 +134,36 @@ function extractProviderText(provider: Provider, payload: Record<string, unknown
   return parts.map((part) => part && typeof part === "object" && typeof (part as Record<string, unknown>).text === "string" ? String((part as Record<string, unknown>).text) : "").join("") || null;
 }
 
+function validTranslationResult(value: unknown, request: Record<string, unknown>): boolean {
+  if (typeof value !== "object" || value === null || typeof (value as Record<string, unknown>).text !== "string") return false;
+  const text = String((value as Record<string, unknown>).text).trim();
+  if (!text) return false;
+
+  const source = String(request.selection ?? "");
+  const target = String(request.targetLanguage ?? "");
+  const hasHan = (input: string) => /\p{Script=Han}/u.test(input);
+  const hasKana = (input: string) => /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(input);
+  const hasHangul = (input: string) => /\p{Script=Hangul}/u.test(input);
+  const hasLatin = (input: string) => /\p{Script=Latin}/u.test(input);
+  const sourceLooksLatin = hasLatin(source) && source.trim().length > 2;
+  const sourceLooksCjk = hasHan(source) || hasKana(source) || hasHangul(source);
+
+  if (target === "zh-CN") {
+    if (hasKana(text) || hasHangul(text)) return false;
+    if ((sourceLooksLatin || hasKana(source) || hasHangul(source)) && !hasHan(text)) return false;
+  }
+  if (target === "ja" && (sourceLooksLatin || hasHangul(source)) && !(hasKana(text) || hasHan(text))) return false;
+  if (target === "ko" && (sourceLooksLatin || hasHan(source) || hasKana(source)) && !hasHangul(text)) return false;
+  if (target === "en" && sourceLooksCjk && !hasLatin(text)) return false;
+  return true;
+}
+
 function validResult(capability: string, value: unknown, request: Record<string, unknown>): boolean {
   if (capability === "daily-plan") return validateGeneratedPlan(value, Number(request.minutes) as 10 | 45 | 90);
   if (capability === "writing-feedback") return validateWritingFeedback(value);
   if (capability === "speaking-feedback") return validateSpeakingFeedback(value);
   if (capability === "vocabulary-card") return validateVocabularyCardResponse(value, String(request.selection));
+  if (capability === "translate") return validTranslationResult(value, request);
   return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).text === "string" && Boolean(String((value as Record<string, unknown>).text).trim());
 }
 
