@@ -25,6 +25,7 @@ export type VocabularyRecord = StoredRecord & {
   chineseMeaning?: string;
   englishDefinition?: string;
   example?: string;
+  exampleSource?: "dictionary" | "ai";
   createdAt?: number;
   savedAt?: number;
 };
@@ -37,4 +38,3 @@ export type ActivityProgress = StoredRecord & {
   completedAt: number | null;
   updatedAt: number;
 };
-

@@ -1,4 +1,4 @@
-export type DictionaryMeaning = { partOfSpeech: string; definition: string };
+export type DictionaryMeaning = { partOfSpeech: string; definition: string; example?: string };
 export type DictionaryEntry = { word: string; phonetic: string; audioUrl: string; meanings: DictionaryMeaning[] };
 
 export function normalizeSelection(text: string): string {
@@ -22,6 +22,7 @@ export function normalizeDictionaryResponse(input: unknown): DictionaryEntry | n
     meanings.push({
       partOfSpeech: typeof meaning.partOfSpeech === "string" ? meaning.partOfSpeech : "word",
       definition: String(definitionItem.definition),
+      example: typeof definitionItem.example === "string" ? definitionItem.example : undefined,
     });
     if (meanings.length === 3) break;
   }
@@ -57,7 +58,10 @@ export async function lookupDictionary(selection: string): Promise<DictionaryEnt
         typeof meaning === "object" && meaning !== null &&
         typeof meaning.partOfSpeech === "string" &&
         typeof meaning.definition === "string"
-      ).slice(0, 3),
+      ).slice(0, 3).map((meaning) => ({
+        ...meaning,
+        example: typeof meaning.example === "string" ? meaning.example : undefined,
+      })),
     };
   } finally {
     window.clearTimeout(timeout);

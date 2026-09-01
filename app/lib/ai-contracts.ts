@@ -22,6 +22,9 @@ export type WritingFeedback = {
   nextActions: string[];
 };
 export type VocabularyCard = {
+  selection: string;
+  validSelection: boolean;
+  suggestedCorrection: string | null;
   chineseMeaning: string;
   englishDefinition: string;
   pronunciation: string;
@@ -59,13 +62,44 @@ export function validateSpeakingFeedback(value: unknown): value is SpeakingFeedb
   return object(value) && value.unofficial === true && typeof value.audioAnalyzed === "boolean" && (typeof value.pronunciation === "string" || value.pronunciation === null) && Array.isArray(value.observations) && Array.isArray(value.alternatives) && typeof value.nextAttempt === "string" && (value.audioAnalyzed || value.pronunciation === null);
 }
 
-export function validateVocabularyCard(value: unknown): value is VocabularyCard {
-  return object(value)
-    && typeof value.chineseMeaning === "string"
-    && typeof value.englishDefinition === "string"
-    && typeof value.pronunciation === "string"
-    && typeof value.example === "string"
-    && Boolean(value.chineseMeaning.trim())
-    && Boolean(value.englishDefinition.trim())
-    && Boolean(value.example.trim());
+function normalizedVocabularyText(value: string): string {
+  return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase("en-US");
+}
+
+export function validateVocabularyCard(value: unknown, requestedSelection?: string): value is VocabularyCard {
+  if (!object(value)
+    || typeof value.selection !== "string"
+    || value.validSelection !== true
+    || (typeof value.suggestedCorrection !== "string" && value.suggestedCorrection !== null)
+    || typeof value.chineseMeaning !== "string"
+    || typeof value.englishDefinition !== "string"
+    || typeof value.pronunciation !== "string"
+    || typeof value.example !== "string"
+    || !value.chineseMeaning.trim()
+    || !value.englishDefinition.trim()
+    || !value.pronunciation.trim()
+    || !value.example.trim()) return false;
+
+  const selection = normalizedVocabularyText(value.selection);
+  if (!selection || (requestedSelection && selection !== normalizedVocabularyText(requestedSelection))) return false;
+  const escapedSelection = selection.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapedSelection}(?=$|[^\\p{L}\\p{N}])`, "iu").test(normalizedVocabularyText(value.example));
+}
+
+export function validateVocabularyCardResponse(value: unknown, requestedSelection: string): value is VocabularyCard {
+  if (!object(value)
+    || typeof value.selection !== "string"
+    || typeof value.validSelection !== "boolean"
+    || (typeof value.suggestedCorrection !== "string" && value.suggestedCorrection !== null)
+    || typeof value.chineseMeaning !== "string"
+    || typeof value.englishDefinition !== "string"
+    || typeof value.pronunciation !== "string"
+    || typeof value.example !== "string"
+    || normalizedVocabularyText(value.selection) !== normalizedVocabularyText(requestedSelection)) return false;
+  if (value.validSelection) return validateVocabularyCard(value, requestedSelection);
+  return Boolean(value.suggestedCorrection?.trim())
+    && !value.chineseMeaning.trim()
+    && !value.englishDefinition.trim()
+    && !value.pronunciation.trim()
+    && !value.example.trim();
 }

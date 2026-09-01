@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { requestAi } from "../lib/ai-client";
+import type { VocabularyCard } from "../lib/ai-contracts";
 import { summarizeActivityProgress } from "../lib/editorial";
 import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
+import { lookupDictionary, type DictionaryEntry } from "../lib/language-tools";
 import type { ActivityProgress, StoredRecord, VocabularyRecord } from "../lib/models";
 import { detectSpeechLanguage, pickNaturalVoice } from "../lib/pronunciation";
-import { dedupeVocabularyRecords, normalizeVocabularyKey, vocabularyRecordId } from "../lib/vocabulary";
+import { completeVocabularyRecord, dedupeVocabularyRecords, hasCompleteVocabularyDetails, normalizeVocabularyKey, recordsNeedingVocabularyDetails, vocabularyRecordId, vocabularyUsageExample } from "../lib/vocabulary";
 
 type ArchiveSummary = {
   started: number;
@@ -26,11 +29,26 @@ function canonicalVocabulary(records: VocabularyRecord[]): VocabularyRecord[] {
   }));
 }
 
+async function fetchVocabularyDetails(record: VocabularyRecord): Promise<VocabularyRecord | null> {
+  let dictionary: DictionaryEntry | null = null;
+  if (detectSpeechLanguage(record.selection) === "en-US" && !/\s/u.test(record.selection.trim())) {
+    try { dictionary = await lookupDictionary(record.selection); } catch { dictionary = null; }
+  }
+  const cardResult = await requestAi<VocabularyCard>({
+    capability: "vocabulary-card",
+    selection: record.selection,
+    context: record.context?.slice(0, 1_000) ?? "",
+    sourceLanguage: "auto",
+  });
+  return completeVocabularyRecord(record, cardResult.ok ? cardResult.data : null, dictionary);
+}
+
 export function ArchiveBoard() {
   const [summary, setSummary] = useState<ArchiveSummary>(EMPTY);
   const [vocabulary, setVocabulary] = useState<VocabularyRecord[]>([]);
   const [hiddenChinese, setHiddenChinese] = useState<Set<string>>(() => new Set());
   const [openUsage, setOpenUsage] = useState<Set<string>>(() => new Set());
+  const [repairingVocabulary, setRepairingVocabulary] = useState<Set<string>>(() => new Set());
   const [state, setState] = useState("Reading this device…");
 
   useEffect(() => {
@@ -41,7 +59,7 @@ export function ArchiveBoard() {
       getAllRecords<StoredRecord>("today"),
       getAllRecords<StoredRecord>("portfolio"),
       getAllRecords<VocabularyRecord>("vocabulary"),
-    ]).then(([activities, saved, today, portfolio, vocabularyRecords]) => {
+    ]).then(async ([activities, saved, today, portfolio, vocabularyRecords]) => {
       if (!active) return;
       const activitySummary = summarizeActivityProgress(activities);
       const todayChecks = today.reduce((total, record) => total + (Array.isArray(record.completed) ? record.completed.length : 0), 0);
@@ -63,6 +81,22 @@ export function ArchiveBoard() {
         ...staleIds.map((id) => deleteRecord("vocabulary", id)),
         ...uniqueVocabulary.map((record) => putRecord<VocabularyRecord>("vocabulary", record)),
       ]).catch(() => undefined);
+
+      const incomplete = recordsNeedingVocabularyDetails(uniqueVocabulary);
+      if (!incomplete.length) return;
+      setState(`Loading meanings and examples for ${incomplete.length} older ${incomplete.length === 1 ? "entry" : "entries"}…`);
+      setRepairingVocabulary(new Set(incomplete.map((record) => record.id)));
+      const repairedRecords = (await Promise.all(incomplete.map(fetchVocabularyDetails)))
+        .filter((record): record is VocabularyRecord => record !== null);
+      await Promise.all(repairedRecords.map((record) => putRecord<VocabularyRecord>("vocabulary", record)));
+      if (!active) return;
+      const repairedById = new Map(repairedRecords.map((record) => [record.id, record]));
+      setVocabulary((current) => current.map((item) => repairedById.get(item.id) ?? item));
+      setRepairingVocabulary(new Set());
+      const repaired = repairedRecords.length;
+      if (active) setState(repaired === incomplete.length
+        ? `Added meanings and examples to ${repaired} older ${repaired === 1 ? "entry" : "entries"}`
+        : `Updated ${repaired} of ${incomplete.length} older entries · retry any remaining row`);
     }).catch(() => { if (active) setState("Device archive unavailable"); });
     return () => { active = false; };
   }, []);
@@ -90,6 +124,28 @@ export function ArchiveBoard() {
 
   function toggleAllChinese() {
     setHiddenChinese(allChineseHidden ? new Set() : new Set(vocabulary.map((item) => item.id)));
+  }
+
+  async function retryVocabularyDetails(item: VocabularyRecord) {
+    setRepairingVocabulary((current) => new Set(current).add(item.id));
+    try {
+      const completed = await fetchVocabularyDetails(item);
+      if (completed) {
+        await putRecord<VocabularyRecord>("vocabulary", completed);
+        setVocabulary((current) => current.map((record) => record.id === completed.id ? completed : record));
+        setState(`Added checked meanings and an example for “${item.selection}”`);
+      } else {
+        setState(`Could not verify complete details for “${item.selection}” · check the selection or retry later`);
+      }
+    } catch {
+      setState(`Could not update “${item.selection}” on this device · retry later`);
+    } finally {
+      setRepairingVocabulary((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+    }
   }
 
   async function speakVocabulary(item: VocabularyRecord) {
@@ -139,6 +195,9 @@ export function ArchiveBoard() {
             {vocabulary.map((item, index) => {
               const chineseHidden = hiddenChinese.has(item.id);
               const usageOpen = openUsage.has(item.id);
+              const detailsReady = hasCompleteVocabularyDetails(item);
+              const repairing = repairingVocabulary.has(item.id);
+              const usageExample = vocabularyUsageExample(item);
               return (
                 <article className="vocabulary-shelf-item" key={item.id}>
                   <span className="vocabulary-item-number">{String(index + 1).padStart(2, "0")}</span>
@@ -153,24 +212,26 @@ export function ArchiveBoard() {
 
                   <div className="vocabulary-meaning" data-hidden={chineseHidden ? "true" : "false"}>
                     <span className="vocabulary-mobile-label">中文释义</span>
-                    <p>{chineseHidden ? "••••••" : item.chineseMeaning || "—"}</p>
+                    <p>{detailsReady && chineseHidden ? "••••••" : detailsReady ? item.chineseMeaning : repairing ? "正在加载释义…" : "释义未加载"}</p>
                   </div>
 
                   <div className="vocabulary-definition">
                     <span className="vocabulary-mobile-label">ENGLISH EXPLANATION</span>
-                    <p>{item.englishDefinition || "—"}</p>
+                    <p>{detailsReady ? item.englishDefinition : repairing ? "Loading a checked explanation…" : "Explanation not loaded"}</p>
                   </div>
 
                   <div className="vocabulary-item-actions">
                     <button type="button" onClick={() => void speakVocabulary(item)}>HEAR</button>
-                    <button type="button" onClick={() => toggleChinese(item.id)}>{chineseHidden ? "SHOW 中文" : "HIDE 中文"}</button>
-                    <button type="button" onClick={() => toggleUsage(item.id)} aria-expanded={usageOpen}>{usageOpen ? "CLOSE USE" : "USE"}</button>
+                    {detailsReady
+                      ? <button type="button" onClick={() => toggleChinese(item.id)}>{chineseHidden ? "SHOW 中文" : "HIDE 中文"}</button>
+                      : <button type="button" disabled={repairing} onClick={() => void retryVocabularyDetails(item)}>{repairing ? "LOADING…" : "RETRY DETAILS"}</button>}
+                    <button type="button" disabled={!usageExample} onClick={() => toggleUsage(item.id)} aria-expanded={usageOpen}>{usageOpen ? "CLOSE USE" : "USE"}</button>
                   </div>
 
-                  {usageOpen && (
+                  {usageOpen && usageExample && (
                     <div className="vocabulary-usage">
-                      <span>IN USE / EXAMPLE</span>
-                      <p>{item.example || item.context || "No example was stored for this older entry."}</p>
+                      <span>{item.exampleSource === "dictionary" ? "DICTIONARY EXAMPLE" : "AI-GENERATED EXAMPLE"}</span>
+                      <p>{usageExample}</p>
                     </div>
                   )}
                 </article>

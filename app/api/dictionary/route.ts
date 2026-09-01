@@ -68,7 +68,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   let upstreamFailed = false;
-  for (const lookup of [lookupDatamuse, lookupFreeDictionary]) {
+  for (const lookup of [lookupFreeDictionary, lookupDatamuse]) {
     try {
       const entry = await lookup(word);
       if (entry) {
