@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestAi } from "../lib/ai-client";
-import type { SourceLanguage, TargetLanguage } from "../lib/ai-contracts";
-import { putRecord } from "../lib/indexed-db";
+import type { SourceLanguage, TargetLanguage, VocabularyCard } from "../lib/ai-contracts";
+import { deleteRecord, getAllRecords, putRecord } from "../lib/indexed-db";
+import type { VocabularyRecord } from "../lib/models";
 import { lookupDictionary, normalizeSelection, type DictionaryEntry } from "../lib/language-tools";
 import { detectSpeechLanguage, pickNaturalVoice, type SpeechLanguage, type VoiceGender } from "../lib/pronunciation";
+import { normalizeVocabularyKey, sameVocabularySelection, vocabularyRecordId } from "../lib/vocabulary";
 import { clampLauncherPosition, hasLauncherMoved, LAUNCHER_STORAGE_KEY, snapLauncherPosition } from "../lib/floating-companion.mjs";
 
 type StudyAction = "define" | "pronounce" | "explain" | "refine" | "translate" | "save";
@@ -69,6 +71,7 @@ export function FloatingStudyWindow({
   const [translatedText, setTranslatedText] = useState("");
   const [translationState, setTranslationState] = useState<"idle" | "working" | "ready" | "error">("idle");
   const [selection, setSelection] = useState("");
+  const [selectionSaved, setSelectionSaved] = useState(false);
   const [entry, setEntry] = useState<DictionaryEntry | null>(null);
   const [message, setMessage] = useState("Type or paste text above. Translation appears automatically.");
   const [resultText, setResultText] = useState("");
@@ -83,6 +86,7 @@ export function FloatingStudyWindow({
   const translationTimer = useRef<number | null>(null);
   const launcherDrag = useRef<{ pointerId: number; start: { x: number; y: number }; origin: { x: number; y: number }; moved: boolean } | null>(null);
   const translationSequence = useRef(0);
+  const saveCheckSequence = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -91,6 +95,23 @@ export function FloatingStudyWindow({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [activityId, initialText]);
+
+  useEffect(() => {
+    const normalized = normalizeSelection(selection);
+    const requestId = ++saveCheckSequence.current;
+    if (!normalized) {
+      setSelectionSaved(false);
+      return;
+    }
+    void getAllRecords<VocabularyRecord>("vocabulary")
+      .then((records) => {
+        if (requestId !== saveCheckSequence.current) return;
+        setSelectionSaved(records.some((record) => sameVocabularySelection(record.selection, normalized)));
+      })
+      .catch(() => {
+        if (requestId === saveCheckSequence.current) setSelectionSaved(false);
+      });
+  }, [selection]);
 
   useEffect(() => {
     new Image().src = pomeranianWinkSrc;
@@ -300,24 +321,57 @@ export function FloatingStudyWindow({
 
     setBusyAction(action);
     setLastAction(action);
-    setEntry(null);
-    setResultText("");
-    setMessage(`${actionLabels[action]}…`);
+    if (action !== "save") {
+      setEntry(null);
+      setResultText("");
+    }
+    setMessage(`${action === "save" && selectionSaved ? "Undo" : actionLabels[action]}…`);
 
     try {
       if (action === "save") {
         try {
-          const savedAt = Date.now();
-          await putRecord("vocabulary", {
-            id: `${activityId}:${normalized.toLowerCase()}`,
+          const records = await getAllRecords<VocabularyRecord>("vocabulary");
+          const matches = records.filter((record) => sameVocabularySelection(record.selection, normalized));
+          if (matches.length) {
+            await Promise.all(matches.map((record) => deleteRecord("vocabulary", record.id)));
+            setSelectionSaved(false);
+            setMessage(`Removed “${normalized}” from Vocabulary Shelf.`);
+            return;
+          }
+
+          let dictionary: DictionaryEntry | null = null;
+          const language = speechLanguage(sourceLanguage, normalized);
+          if (language === "en-US" && !/\\s/u.test(normalized)) {
+            try { dictionary = await lookupDictionary(normalized); } catch { dictionary = null; }
+          }
+
+          const cardResult = await requestAi<VocabularyCard>({
+            capability: "vocabulary-card",
             selection: normalized,
+            context: sourceText.slice(0, 1_000),
+            sourceLanguage,
+          });
+          const card = cardResult.ok ? cardResult.data : null;
+          const savedAt = Date.now();
+          await putRecord<VocabularyRecord>("vocabulary", {
+            id: vocabularyRecordId(normalized),
+            selection: normalized,
+            normalizedSelection: normalizeVocabularyKey(normalized),
             sourceActivityId: activityId,
             sourceTitle: title,
-            context: sourceText.slice(0, 320),
+            context: sourceText.slice(0, 600),
+            pronunciation: dictionary?.phonetic || card?.pronunciation || "",
+            audioUrl: dictionary?.audioUrl || "",
+            chineseMeaning: card?.chineseMeaning || "",
+            englishDefinition: dictionary?.meanings[0]?.definition || card?.englishDefinition || "",
+            example: card?.example || "",
             createdAt: savedAt,
             savedAt,
           });
-          setMessage(`Saved “${normalized}” to Vocabulary Shelf in Archive.`);
+          setSelectionSaved(true);
+          setMessage(card
+            ? `Saved “${normalized}” with pronunciation, meanings, and an example.`
+            : `Saved “${normalized}”. Extra AI details were unavailable this time.`);
         } catch {
           setMessage("Saving is unavailable in this browser.");
         }
@@ -506,10 +560,11 @@ export function FloatingStudyWindow({
                 key={action}
                 disabled={!!busyAction}
                 data-primary={action === "explain" ? "true" : "false"}
-                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Make the text more natural" : action === "translate" ? "Translate the target" : "Save on this device"}
+                data-saved={action === "save" && selectionSaved ? "true" : undefined}
+                title={action === "define" ? "Dictionary definition" : action === "pronounce" ? "Read the target aloud" : action === "explain" ? "Explain in context with AI" : action === "refine" ? "Make the text more natural" : action === "translate" ? "Translate the target" : selectionSaved ? "Undo this saved vocabulary item" : "Save on this device"}
                 onClick={() => void act(action)}
               >
-                {busyAction === action ? "…" : actionLabels[action]}
+                {busyAction === action ? "…" : action === "save" && selectionSaved ? "Undo" : actionLabels[action]}
               </button>
             ))}
           </div>
@@ -518,7 +573,7 @@ export function FloatingStudyWindow({
         <div className="floating-result-panel" data-state={busyAction ? "working" : "ready"}>
           <div className="floating-result-label">
             <span>{busyAction ? "WORKING" : "RESULT"}</span>
-            <span>{lastAction ? actionLabels[lastAction] : "Ready"}</span>
+            <span>{lastAction ? (lastAction === "save" ? "Vocabulary" : actionLabels[lastAction]) : "Ready"}</span>
           </div>
           <div className="floating-result-copy">
             <p className="floating-tool-message" aria-live="polite">{message}</p>
