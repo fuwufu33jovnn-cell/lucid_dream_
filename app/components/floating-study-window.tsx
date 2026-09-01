@@ -468,7 +468,7 @@ export function FloatingStudyWindow({
             <input
               ref={targetInputRef}
               value={selection}
-              onChange={(event) => { setSelection(event.target.value); setEntry(null); setResultText(""); }}
+              onChange={(event) => { setSelection(event.target.value); setResultText(""); }}
               placeholder="e.g. quietly specific"
               autoComplete="off"
             />
@@ -502,8 +502,8 @@ export function FloatingStudyWindow({
           </div>
           <div className="floating-result-copy">
             <p className="floating-tool-message" aria-live="polite">{message}</p>
-            {(resultText || entry?.meanings[0]?.definition) && (
-              <button type="button" className="floating-result-speak" onClick={() => speakText(resultText || entry?.meanings[0]?.definition || "", resultLanguage)} aria-label="Speak result" title="Speak result">◖))</button>
+            {resultText && (
+              <button type="button" className="floating-result-speak" onClick={() => speakText(resultText, resultLanguage)} aria-label="Speak result" title="Speak result">◖))</button>
             )}
           </div>
           {resultText && <p className="floating-action-result">{resultText}</p>}
