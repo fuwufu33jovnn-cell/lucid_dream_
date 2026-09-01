@@ -108,6 +108,21 @@ async function suggestionCandidates(url: string): Promise<string[]> {
     .filter((value) => /^[A-Za-z][A-Za-z'-]{2,}$/u.test(value));
 }
 
+function adjacentTranspositions(word: string): string[] {
+  const candidates = new Set<string>();
+  for (let index = 0; index < word.length - 1; index += 1) {
+    if (word[index] === word[index + 1]) continue;
+    candidates.add(
+      word.slice(0, index) +
+      word[index + 1] +
+      word[index] +
+      word.slice(index + 2)
+    );
+  }
+  return [...candidates];
+}
+
+
 async function suggestDatamuseWord(word: string): Promise<string | null> {
   const [typedSuggestions, soundAlikes] = await Promise.all([
     suggestionCandidates(`${DATAMUSE_SUG}?s=${encodeURIComponent(word)}&max=10`),
@@ -116,7 +131,7 @@ async function suggestDatamuseWord(word: string): Promise<string | null> {
 
   const normalized = word.toLocaleLowerCase("en-US");
   const maxDistance = word.length <= 5 ? 1 : 2;
-  const candidates = [...typedSuggestions, ...soundAlikes]
+  const candidates = [...adjacentTranspositions(word), ...typedSuggestions, ...soundAlikes]
     .filter((candidate, index, all) =>
       candidate.toLocaleLowerCase("en-US") !== normalized &&
       editDistance(word, candidate) <= maxDistance &&
