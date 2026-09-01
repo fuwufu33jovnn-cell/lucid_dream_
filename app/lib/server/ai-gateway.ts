@@ -3,7 +3,7 @@ import { parseGatewayRequest } from "../../../supabase/functions/_shared/ai-cont
 
 type GatewayEnv = Record<string, string | undefined>;
 type FetchLike = typeof globalThis.fetch;
-type Provider = "qwen" | "mistral" | "siliconflow" | "doubao" | "kimi" | "deepseek" | "gemini" | "openai";
+type Provider = "qwen" | "mistral" | "siliconflow" | "doubao" | "deepseek" | "kimi" | "gemini" | "openai";
 
 type HandlerDependencies = {
   env: GatewayEnv;
@@ -24,8 +24,8 @@ export function getConfiguredProviders(env: GatewayEnv): Provider[] {
     ["mistral", env.MISTRAL_API_KEY],
     ["siliconflow", env.SILICONFLOW_API_KEY],
     ["doubao", env.ARK_API_KEY],
-    ["kimi", env.KIMI_API_KEY],
     ["deepseek", env.DEEPSEEK_API_KEY],
+    ["kimi", env.KIMI_API_KEY],
     ["gemini", env.GEMINI_API_KEY],
     ["openai", env.OPENAI_API_KEY],
   ];
