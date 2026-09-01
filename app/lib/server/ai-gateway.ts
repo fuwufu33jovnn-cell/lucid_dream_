@@ -173,7 +173,7 @@ function validResult(capability: string, value: unknown, request: Record<string,
   if (capability === "writing-feedback") return validateWritingFeedback(value);
   if (capability === "speaking-feedback") return validateSpeakingFeedback(value);
   if (capability === "vocabulary-card") return validateVocabularyCardResponse(value, String(request.selection));
-  if (capability === "translate") return validTranslationResult(value, request);
+  if (capability === "translate" || capability === "context-translate") return validTranslationResult(value, request);
   return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).text === "string" && Boolean(String((value as Record<string, unknown>).text).trim());
 }
 
