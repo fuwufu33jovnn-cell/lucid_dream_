@@ -11,9 +11,10 @@ type HandlerDependencies = {
 };
 
 const MAX_REQUEST_BYTES = 65_536;
-const PROVIDER_TIMEOUT_MS = 15_000;
+const PROVIDER_TIMEOUT_MS = 12_000;
+const TRANSLATE_PROVIDER_TIMEOUT_MS = 7_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX_REQUESTS = 20;
+const RATE_LIMIT_MAX_REQUESTS = 30;
 
 const requestBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -142,9 +143,9 @@ function validResult(capability: string, value: unknown, request: Record<string,
   return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).text === "string" && Boolean(String((value as Record<string, unknown>).text).trim());
 }
 
-async function fetchWithTimeout(fetcher: FetchLike, url: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(fetcher: FetchLike, url: string, init: RequestInit, timeoutMs = PROVIDER_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetcher(url, { ...init, signal: controller.signal });
   } finally {
@@ -152,7 +153,7 @@ async function fetchWithTimeout(fetcher: FetchLike, url: string, init: RequestIn
   }
 }
 
-async function callProvider(provider: Provider, key: string, request: Record<string, unknown>, env: GatewayEnv, fetcher: FetchLike): Promise<unknown | null> {
+async function callProvider(provider: Provider, key: string, request: Record<string, unknown>, env: GatewayEnv, fetcher: FetchLike, attempt = 0): Promise<unknown | null> {
   const capability = String(request.capability);
   const schema = schemaFor(capability);
   const instructions = instructionsFor(capability);
@@ -172,7 +173,8 @@ async function callProvider(provider: Provider, key: string, request: Record<str
   }
 
   try {
-    const response = await fetchWithTimeout(fetcher, url, init);
+    const timeoutMs = capability === "translate" ? TRANSLATE_PROVIDER_TIMEOUT_MS : PROVIDER_TIMEOUT_MS;
+    const response = await fetchWithTimeout(fetcher, url, init, timeoutMs);
     if (!response.ok) {
       console.warn("[ai] provider request failed", { provider, capability, status: response.status });
       return null;
@@ -189,11 +191,19 @@ async function callProvider(provider: Provider, key: string, request: Record<str
       value = JSON.parse(text);
     } catch {
       console.warn("[ai] provider returned invalid JSON", { provider, capability });
+      if (provider === "gemini" && capability === "vocabulary-card" && attempt === 0) {
+        console.info("[ai] retrying vocabulary card after malformed output", { provider });
+        return callProvider(provider, key, request, env, fetcher, attempt + 1);
+      }
       return null;
     }
 
     if (!validResult(capability, value, request)) {
       console.warn("[ai] provider output failed validation", { provider, capability });
+      if (provider === "gemini" && capability === "vocabulary-card" && attempt === 0) {
+        console.info("[ai] retrying vocabulary card after validation failure", { provider });
+        return callProvider(provider, key, request, env, fetcher, attempt + 1);
+      }
       return null;
     }
 
