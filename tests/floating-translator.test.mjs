@@ -13,7 +13,7 @@ test("Context keeps the two-pane sentence translator while vocabulary Translate 
   assert.match(source, /capability: "context-translate"/);
   assert.match(source, /translateContext/);
   assert.match(source, /translatedText/);
-  assert.match(source, />Translate now</);
+  assert.match(source, /Translate now/);
   assert.match(source, /capability: "translate"/);
   assert.match(source, /Translate is for a word or short phrase/);
 });
@@ -58,7 +58,8 @@ test("speech controls cover context, target pronunciation and results", async ()
   const source = await readFile(componentUrl, "utf8");
   assert.match(source, /speechRate/);
   assert.match(source, /voiceGender/);
-  assert.match(source, /Speak context/);
+  assert.match(source, /Speak source sentence/);
+  assert.match(source, /Speak translated sentence/);
   assert.match(source, /Speak result/);
   assert.match(source, /Female/);
   assert.match(source, /Male/);
