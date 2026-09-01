@@ -67,3 +67,15 @@ test("save prepares dictionary and AI vocabulary details in parallel with visibl
   assert.match(source, /Building a complete card/);
   assert.match(source, /Saving…/);
 });
+
+
+test("Target shows a clickable spelling correction without silently replacing the word", async () => {
+  const source = await readFile(componentUrl, "utf8");
+  const css = await readFile(cssUrl, "utf8");
+  assert.match(source, /spellingSuggestion/);
+  assert.match(source, /Did you mean:/);
+  assert.match(source, /你想检索的是不是这个词？/);
+  assert.match(source, /setSelection\(spellingSuggestion\)/);
+  assert.match(source, /setTimeout[\s\S]*320/);
+  assert.match(css, /floating-spelling-suggestion/);
+});
