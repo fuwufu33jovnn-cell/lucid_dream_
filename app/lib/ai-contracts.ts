@@ -70,12 +70,8 @@ function normalizedVocabularyText(value: string): string {
 }
 
 function vocabularyBoundaryMatch(example: string, phrase: string): boolean {
-  const escaped = phrase.replace(/[.*+?^$(){}|[\]\\]/g, "\\function normalizedVocabularyText(value: string): string {
-  return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase("en-US");
-}
-
-");
-  return new RegExp("(^|[^\\p{L}\\p{N}])" + escaped + "(?=$|[^\\p{L}\\p{N}])", "iu").test(example);
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "iu").test(example);
 }
 
 function englishInflections(word: string): string[] {
