@@ -71,12 +71,19 @@ async function lookupDatamuseExact(word: string): Promise<DictionaryEntry | null
   return exact ? normalizeDatamuseResponse([exact], word) : null;
 }
 
+function isMisspellingEntry(entry: DictionaryEntry | null): boolean {
+  if (!entry) return false;
+  return entry.meanings.some((meaning) =>
+    /\b(?:common\s+)?misspelling\s+of\b|\bincorrect\s+spelling\s+of\b|\bmis-spelling\s+of\b/iu.test(meaning.definition)
+  );
+}
+
 async function isRecognizedWord(word: string): Promise<boolean> {
   const [freeDictionary, datamuse] = await Promise.all([
     lookupFreeDictionary(word).catch(() => null),
     lookupDatamuseExact(word).catch(() => null),
   ]);
-  return Boolean(freeDictionary || datamuse);
+  return [freeDictionary, datamuse].some((entry) => Boolean(entry) && !isMisspellingEntry(entry));
 }
 
 function editDistance(a: string, b: string): number {
