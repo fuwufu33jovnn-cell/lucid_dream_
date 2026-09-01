@@ -74,7 +74,7 @@ export async function suggestDictionaryWord(selection: string, signal?: AbortSig
   const word = normalizeSelection(selection);
   if (!/^[A-Za-z][A-Za-z'-]{2,}$/u.test(word)) return null;
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 3_500);
+  const timeout = window.setTimeout(() => controller.abort(), 4_200);
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
   try {
