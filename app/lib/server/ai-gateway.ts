@@ -1,9 +1,10 @@
 import { validateGeneratedPlan, validateSpeakingFeedback, validateVocabularyCardResponse, validateWritingFeedback } from "../ai-contracts.ts";
+import { AI_PROVIDER_IDS, type AiProvider } from "../ai-providers.ts";
 import { parseGatewayRequest } from "../../../supabase/functions/_shared/ai-contracts.ts";
 
 type GatewayEnv = Record<string, string | undefined>;
 type FetchLike = typeof globalThis.fetch;
-type Provider = "qwen" | "mistral" | "siliconflow" | "doubao" | "deepseek" | "kimi" | "gemini" | "openai";
+type Provider = AiProvider;
 
 type HandlerDependencies = {
   env: GatewayEnv;
@@ -18,18 +19,23 @@ const RATE_LIMIT_MAX_REQUESTS = 30;
 
 const requestBuckets = new Map<string, { count: number; resetAt: number }>();
 
+const PROVIDER_API_KEY_ENV = {
+  qwen: "QWEN_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  siliconflow: "SILICONFLOW_API_KEY",
+  doubao: "ARK_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  kimi: "KIMI_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  openai: "OPENAI_API_KEY",
+} as const satisfies Record<Provider, string>;
+
+function providerEntries(env: GatewayEnv): Array<[Provider, string | undefined]> {
+  return AI_PROVIDER_IDS.map((provider) => [provider, env[PROVIDER_API_KEY_ENV[provider]]]);
+}
+
 export function getConfiguredProviders(env: GatewayEnv): Provider[] {
-  const providers: Array<[Provider, string | undefined]> = [
-    ["qwen", env.QWEN_API_KEY],
-    ["mistral", env.MISTRAL_API_KEY],
-    ["siliconflow", env.SILICONFLOW_API_KEY],
-    ["doubao", env.ARK_API_KEY],
-    ["deepseek", env.DEEPSEEK_API_KEY],
-    ["kimi", env.KIMI_API_KEY],
-    ["gemini", env.GEMINI_API_KEY],
-    ["openai", env.OPENAI_API_KEY],
-  ];
-  return providers.filter(([, key]) => Boolean(key?.trim())).map(([provider]) => provider);
+  return providerEntries(env).filter(([, key]) => Boolean(key?.trim())).map(([provider]) => provider);
 }
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -283,17 +289,8 @@ export function createAiHandler({ env, fetch: fetcher }: HandlerDependencies) {
     const parsed = parseGatewayRequest(body);
     if (!parsed.ok) return json({ error: parsed.message }, 400);
 
-    const providers: Array<[Provider, string | undefined]> = [
-      ["qwen", env.QWEN_API_KEY],
-      ["mistral", env.MISTRAL_API_KEY],
-      ["siliconflow", env.SILICONFLOW_API_KEY],
-      ["doubao", env.ARK_API_KEY],
-      ["kimi", env.KIMI_API_KEY],
-      ["deepseek", env.DEEPSEEK_API_KEY],
-      ["gemini", env.GEMINI_API_KEY],
-      ["openai", env.OPENAI_API_KEY],
-    ];
-    if (getConfiguredProviders(env).length === 0) return json({ error: "AI is not configured yet." }, 503);
+    const providers = providerEntries(env);
+    if (!providers.some(([, key]) => Boolean(key?.trim()))) return json({ error: "AI is not configured yet." }, 503);
 
     for (const [provider, key] of providers) {
       if (!key?.trim()) continue;

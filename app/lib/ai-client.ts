@@ -1,6 +1,8 @@
 import type { AiRequest } from "./ai-contracts";
+import { isAiProvider, type AiProvider } from "./ai-providers";
 
-export type AiProvider = "qwen" | "mistral" | "siliconflow" | "doubao" | "deepseek" | "kimi" | "gemini" | "openai";
+export type { AiProvider } from "./ai-providers";
+
 export type AiStatus = { configured: boolean; providers: AiProvider[] };
 export type AiResponse<T> = { ok: true; data: T } | { ok: false; code: "not-connected" | "timeout" | "invalid-response" | "request-failed"; message: string };
 export type AiRequestOptions = { timeoutMs?: number; signal?: AbortSignal };
@@ -11,7 +13,7 @@ export async function getAiStatus(): Promise<AiStatus> {
     if (!response.ok) return { configured: false, providers: [] };
     const data = await response.json() as Partial<AiStatus>;
     const providers = Array.isArray(data.providers)
-      ? data.providers.filter((provider): provider is AiProvider => provider === "qwen" || provider === "mistral" || provider === "siliconflow" || provider === "doubao" || provider === "kimi" || provider === "deepseek" || provider === "gemini" || provider === "openai")
+      ? data.providers.filter(isAiProvider)
       : [];
     return { configured: data.configured === true && providers.length > 0, providers };
   } catch {

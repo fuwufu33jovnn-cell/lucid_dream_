@@ -256,6 +256,61 @@ test("AI gateway uses Qwen as the first configured subtitle-friendly provider", 
   assert.deepEqual(await response.json(), { text: "千问结果" });
 });
 
+test("every AI capability uses the same complete provider fallback order", async () => {
+  const requests = [
+    { capability: "daily-plan", minutes: 10, focus: "speaking", evidence: [] },
+    { capability: "writing-feedback", prompt: "Write an email.", response: "Hello there.", taskType: "work" },
+    { capability: "speaking-feedback", prompt: "Introduce yourself.", transcript: "Hello there.", audioAnalyzed: false },
+    { capability: "define", selection: "subtle", context: "The shift is subtle." },
+    { capability: "relations", selection: "subtle", context: "The shift is subtle." },
+    { capability: "usage", selection: "subtle", context: "The shift is subtle." },
+    { capability: "explain", selection: "subtle", context: "The shift is subtle." },
+    { capability: "refine", selection: "subtle", context: "The shift is subtle." },
+    { capability: "vocabulary-card", selection: "subtle", context: "The shift is subtle.", sourceLanguage: "en" },
+    { capability: "translate", selection: "subtle", context: "The shift is subtle.", sourceLanguage: "en", targetLanguage: "zh-CN" },
+    { capability: "context-translate", selection: "The shift is subtle.", context: "The shift is subtle.", sourceLanguage: "en", targetLanguage: "zh-CN" },
+  ];
+  const expectedHosts = [
+    "dashscope.aliyuncs.com",
+    "api.mistral.ai",
+    "api.siliconflow.cn",
+    "ark.cn-beijing.volces.com",
+    "api.deepseek.com",
+    "api.moonshot.cn",
+    "generativelanguage.googleapis.com",
+    "api.openai.com",
+  ];
+  const env = {
+    QWEN_API_KEY: "qwen-test",
+    MISTRAL_API_KEY: "mistral-test",
+    SILICONFLOW_API_KEY: "silicon-test",
+    ARK_API_KEY: "doubao-test",
+    DEEPSEEK_API_KEY: "deepseek-test",
+    KIMI_API_KEY: "kimi-test",
+    GEMINI_API_KEY: "gemini-test",
+    OPENAI_API_KEY: "openai-test",
+  };
+
+  for (const [index, body] of requests.entries()) {
+    const hosts = [];
+    const handler = createAiHandler({
+      env,
+      fetch: async (url) => {
+        hosts.push(new URL(String(url)).host);
+        return Response.json({ error: "try next provider" }, { status: 503 });
+      },
+    });
+    const response = await handler(new Request("https://lucid.example/api/ai", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": `192.0.2.${index + 1}` },
+      body: JSON.stringify(body),
+    }));
+
+    assert.equal(response.status, 502, body.capability);
+    assert.deepEqual(hosts, expectedHosts, body.capability);
+  }
+});
+
 test("SiliconFlow Qwen3 requests disable thinking", async () => {
   let body;
   const handler = createAiHandler({
